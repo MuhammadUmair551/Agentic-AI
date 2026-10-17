@@ -15,6 +15,12 @@ export type ValidatedApiEnvironment = Readonly<{
   LLM_API_KEY?: string | undefined;
   LLM_MODEL?: string | undefined;
   LLM_TIMEOUT_MS?: number | undefined;
+  FALLBACK_LLM_BASE_URL?: string | undefined;
+  FALLBACK_LLM_API_KEY?: string | undefined;
+  FALLBACK_LLM_MODEL?: string | undefined;
+  OLLAMA_BASE_FREE_URL?: string | undefined;
+  OLLAMA_API_KEY?: string | undefined;
+  OLLAMA_FREE_MODEL?: string | undefined;
   LLM_GEMINI_BASE_URL?: string | undefined;
   LLM_GEMINI_API_KEY?: string | undefined;
   LLM_GEMINI_MODEL?: string | undefined;
