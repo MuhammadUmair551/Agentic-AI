@@ -38,5 +38,9 @@ export const apiEnvironmentSchema = z.object({
   QUEUE_INTERVAL_MS: z.coerce.number().int().positive().optional()
 }) satisfies z.ZodType<ValidatedApiEnvironment>;
 
-export const validateApiEnvironment = (input: unknown): ValidatedApiEnvironment =>
-  Object.freeze(apiEnvironmentSchema.parse(input));
+export const validateApiEnvironment = (input: unknown): ValidatedApiEnvironment => {
+  const normalized = typeof input === "object" && input !== null && !Array.isArray(input)
+    ? Object.fromEntries(Object.entries(input).map(([key, value]) => [key, value === "" ? undefined : value]))
+    : input;
+  return Object.freeze(apiEnvironmentSchema.parse(normalized));
+};
