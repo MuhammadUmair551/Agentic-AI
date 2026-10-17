@@ -20,7 +20,6 @@ type ProviderEnvironment = Readonly<{
   timeoutMs?: number | undefined;
 }>;
 
-// ─── Zod schemas ───
 const providerEnvironmentSchema = z.object({
   baseUrl: z.url(),
   apiKey: z.string().min(1),
@@ -28,7 +27,6 @@ const providerEnvironmentSchema = z.object({
   timeoutMs: z.number().int().positive().optional()
 });
 
-// ─── Parsers ───
 const parseProviderNames = (value: string | undefined): readonly ProviderName[] => {
   if (!value) return [];
   return value.split(",").map((name) => z.enum(providerNames).parse(name.trim().toLowerCase()));
@@ -48,9 +46,9 @@ const namedEnvironment = (environment: ValidatedApiEnvironment, name: ProviderNa
     timeoutMs: environment.LLM_GROQ_TIMEOUT_MS
   };
   return {
-    baseUrl: environment.LLM_OLLAMA_BASE_URL,
-    apiKey: environment.LLM_OLLAMA_API_KEY,
-    model: environment.LLM_OLLAMA_MODEL,
+    baseUrl: environment.LLM_OLLAMA_BASE_URL ?? environment.OLLAMA_BASE_FREE_URL,
+    apiKey: environment.LLM_OLLAMA_API_KEY ?? environment.OLLAMA_API_KEY,
+    model: environment.LLM_OLLAMA_MODEL ?? environment.OLLAMA_FREE_MODEL,
     timeoutMs: environment.LLM_OLLAMA_TIMEOUT_MS
   };
 };
@@ -64,23 +62,56 @@ const inferredProviderName = (baseUrl: string): string => {
   const host = new URL(baseUrl).hostname.toLowerCase();
   if (host.includes("groq")) return "groq";
   if (host.includes("google") || host.includes("gemini")) return "gemini";
+  if (host.includes("ollama")) return "ollama";
   return "default";
 };
 
-const routeProviderNames = (value: string | undefined, fallback: readonly string[]): readonly string[] =>
-  value ? value.split(",").map((name) => name.trim()).filter(Boolean) : fallback;
+const hasProviderCredentials = (provider: ProviderEnvironment): boolean =>
+  Boolean(provider.baseUrl && provider.apiKey && provider.model);
 
-// ─── Public API ───
+const routeProviderNames = (value: string | undefined, fallback: readonly string[]): readonly string[] => {
+  const names = value ? value.split(",").map((name) => name.trim()).filter(Boolean) : fallback;
+  return Object.freeze([...new Set(names)]);
+};
+
 export const readProviderConfigs = (environment: ValidatedApiEnvironment): readonly ProviderConfig[] => {
-  const named = parseProviderNames(environment.LLM_PROVIDERS).map((name) => toProviderConfig(name, namedEnvironment(environment, name)));
-  if (named.length > 0) return named;
-  if (!environment.LLM_BASE_URL && !environment.LLM_API_KEY && !environment.LLM_MODEL && environment.LLM_TIMEOUT_MS === undefined) return [];
-  return [toProviderConfig(inferredProviderName(environment.LLM_BASE_URL ?? ""), {
+  const configured: ProviderConfig[] = [];
+  const add = (name: string, values: ProviderEnvironment): void => {
+    if (configured.some((provider) => provider.name === name) || !hasProviderCredentials(values)) return;
+    configured.push(toProviderConfig(name, values));
+  };
+
+  for (const name of parseProviderNames(environment.LLM_PROVIDERS)) {
+    add(name, namedEnvironment(environment, name));
+  }
+
+  const legacy: ProviderEnvironment = {
     baseUrl: environment.LLM_BASE_URL,
     apiKey: environment.LLM_API_KEY,
     model: environment.LLM_MODEL,
     timeoutMs: environment.LLM_TIMEOUT_MS
-  })];
+  };
+  if (hasProviderCredentials(legacy)) add(inferredProviderName(legacy.baseUrl ?? ""), legacy);
+
+  const fallback: ProviderEnvironment = {
+    baseUrl: environment.FALLBACK_LLM_BASE_URL,
+    apiKey: environment.FALLBACK_LLM_API_KEY,
+    model: environment.FALLBACK_LLM_MODEL
+  };
+  if (hasProviderCredentials(fallback)) {
+    const inferred = inferredProviderName(fallback.baseUrl ?? "");
+    add(inferred === "default" ? "fallback" : inferred, fallback);
+  }
+
+  const ollama: ProviderEnvironment = {
+    baseUrl: environment.LLM_OLLAMA_BASE_URL ?? environment.OLLAMA_BASE_FREE_URL,
+    apiKey: environment.LLM_OLLAMA_API_KEY ?? environment.OLLAMA_API_KEY,
+    model: environment.LLM_OLLAMA_MODEL ?? environment.OLLAMA_FREE_MODEL,
+    timeoutMs: environment.LLM_OLLAMA_TIMEOUT_MS
+  };
+  if (hasProviderCredentials(ollama)) add("ollama", ollama);
+
+  return Object.freeze(configured);
 };
 
 export const readProviderRouterConfig = (environment: ValidatedApiEnvironment): ProviderRouterConfig => {
