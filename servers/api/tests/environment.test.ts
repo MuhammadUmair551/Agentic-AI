@@ -66,3 +66,32 @@ void test("rejects invalid server environment input", () => {
 void test("requires runtime values from the environment", () => {
   assert.throws(() => readApiEnvironment({}), ZodError);
 });
+
+
+void test("loads legacy fallback and Ollama aliases without duplicate provider names", () => {
+  const environment = readApiEnvironment({
+    NODE_ENV: "test", API_HOST: "127.0.0.1", API_PORT: "4000", WEB_ORIGIN: "http://localhost:3000", LOG_LEVEL: "silent",
+    LLM_PROVIDERS: "groq,gemini,ollama",
+    LLM_GROQ_BASE_URL: "https://api.groq.com/openai/v1", LLM_GROQ_API_KEY: "groq-key", LLM_GROQ_MODEL: "groq-model",
+    LLM_GEMINI_BASE_URL: "https://generativelanguage.googleapis.com/v1beta/openai", LLM_GEMINI_API_KEY: "gemini-key", LLM_GEMINI_MODEL: "gemini-model",
+    FALLBACK_LLM_BASE_URL: "https://api.groq.com/openai/v1", FALLBACK_LLM_API_KEY: "duplicate-key", FALLBACK_LLM_MODEL: "duplicate-model",
+    OLLAMA_BASE_FREE_URL: "https://ollama.com/v1", OLLAMA_API_KEY: "ollama-key", OLLAMA_FREE_MODEL: "ollama-model"
+  });
+
+  assert.deepEqual(readProviderConfigs(environment).map(({ name, model }) => ({ name, model })), [
+    { name: "groq", model: "groq-model" },
+    { name: "gemini", model: "gemini-model" },
+    { name: "ollama", model: "ollama-model" }
+  ]);
+});
+
+void test("treats blank optional provider variables as unset", () => {
+  const environment = readApiEnvironment({
+    NODE_ENV: "test", API_HOST: "127.0.0.1", API_PORT: "4000", WEB_ORIGIN: "http://localhost:3000", LOG_LEVEL: "silent",
+    LLM_BASE_URL: "", LLM_API_KEY: "", LLM_MODEL: "",
+    FALLBACK_LLM_BASE_URL: "", FALLBACK_LLM_API_KEY: "", FALLBACK_LLM_MODEL: "",
+    OLLAMA_BASE_FREE_URL: "", OLLAMA_API_KEY: "", OLLAMA_FREE_MODEL: ""
+  });
+
+  assert.deepEqual(readProviderConfigs(environment), []);
+});
