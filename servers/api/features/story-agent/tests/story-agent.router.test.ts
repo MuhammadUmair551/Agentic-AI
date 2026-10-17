@@ -50,6 +50,7 @@ void test("fails over to the next provider after a retryable failure", async () 
     config: { providers: [provider("groq"), provider("gemini")], routes: routes(["groq", "gemini"]), cooldownMs: 100 },
     createClient: (config): StoryAgentProviderClient => ({
       complete: async () => {
+        await Promise.resolve();
         calls.push(config.name);
         if (config.name === "groq") throw providerError("retryable");
         return result(config.name);
@@ -71,6 +72,7 @@ void test("fails over when a provider rejects a model-specific request", async (
     config: { providers: [provider("groq"), provider("gemini")], routes: routes(["groq", "gemini"]), cooldownMs: 100 },
     createClient: (config): StoryAgentProviderClient => ({
       complete: async () => {
+        await Promise.resolve();
         calls.push(config.name);
         if (config.name === "groq") throw providerError("bad-request");
         return result(config.name);
