@@ -98,10 +98,7 @@ export const readProviderConfigs = (environment: ValidatedApiEnvironment): reado
     apiKey: environment.FALLBACK_LLM_API_KEY,
     model: environment.FALLBACK_LLM_MODEL
   };
-  if (hasProviderCredentials(fallback)) {
-    const inferred = inferredProviderName(fallback.baseUrl ?? "");
-    add(inferred === "default" ? "fallback" : inferred, fallback);
-  }
+  if (hasProviderCredentials(fallback)) add("fallback", fallback);
 
   const ollama: ProviderEnvironment = {
     baseUrl: environment.LLM_OLLAMA_BASE_URL ?? environment.OLLAMA_BASE_FREE_URL,
