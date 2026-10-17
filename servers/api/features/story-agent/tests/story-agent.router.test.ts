@@ -43,6 +43,50 @@ void test("fails over retryable provider failures and skips authentication failu
   assert.equal(warnings.length, 1);
 });
 
+
+void test("fails over to the next provider after a retryable failure", async () => {
+  const calls: string[] = [];
+  const router = createStoryAgentProviderRouter({
+    config: { providers: [provider("groq"), provider("gemini")], routes: routes(["groq", "gemini"]), cooldownMs: 100 },
+    createClient: (config): StoryAgentProviderClient => ({
+      complete: async () => {
+        await Promise.resolve();
+        calls.push(config.name);
+        if (config.name === "groq") throw providerError("retryable");
+        return result(config.name);
+      }
+    }),
+    logger: { warn: (): void => undefined },
+    clock: { now: () => 0 }
+  });
+
+  const completion = await router.complete({ profile: "generate", messages: [] });
+  assert.equal(completion.provider, "gemini");
+  assert.deepEqual(calls, ["groq", "gemini"]);
+});
+
+
+void test("fails over when a provider rejects a model-specific request", async () => {
+  const calls: string[] = [];
+  const router = createStoryAgentProviderRouter({
+    config: { providers: [provider("groq"), provider("gemini")], routes: routes(["groq", "gemini"]), cooldownMs: 100 },
+    createClient: (config): StoryAgentProviderClient => ({
+      complete: async () => {
+        await Promise.resolve();
+        calls.push(config.name);
+        if (config.name === "groq") throw providerError("bad-request");
+        return result(config.name);
+      }
+    }),
+    logger: { warn: (): void => undefined },
+    clock: { now: () => 0 }
+  });
+
+  const completion = await router.complete({ profile: "generate", messages: [] });
+  assert.equal(completion.provider, "gemini");
+  assert.deepEqual(calls, ["groq", "gemini"]);
+});
+
 void test("opens a circuit after two failures, then permits one cooldown trial", async () => {
   let now = 0;
   let shouldSucceed = false;

@@ -13,6 +13,12 @@ export const apiEnvironmentSchema = z.object({
   LLM_API_KEY: z.string().min(1).optional(),
   LLM_MODEL: z.string().min(1).optional(),
   LLM_TIMEOUT_MS: z.coerce.number().int().positive().optional(),
+  FALLBACK_LLM_BASE_URL: z.url().optional(),
+  FALLBACK_LLM_API_KEY: z.string().min(1).optional(),
+  FALLBACK_LLM_MODEL: z.string().min(1).optional(),
+  OLLAMA_BASE_FREE_URL: z.url().optional(),
+  OLLAMA_API_KEY: z.string().min(1).optional(),
+  OLLAMA_FREE_MODEL: z.string().min(1).optional(),
   LLM_GEMINI_BASE_URL: z.url().optional(),
   LLM_GEMINI_API_KEY: z.string().min(1).optional(),
   LLM_GEMINI_MODEL: z.string().min(1).optional(),
@@ -32,5 +38,9 @@ export const apiEnvironmentSchema = z.object({
   QUEUE_INTERVAL_MS: z.coerce.number().int().positive().optional()
 }) satisfies z.ZodType<ValidatedApiEnvironment>;
 
-export const validateApiEnvironment = (input: unknown): ValidatedApiEnvironment =>
-  Object.freeze(apiEnvironmentSchema.parse(input));
+export const validateApiEnvironment = (input: unknown): ValidatedApiEnvironment => {
+  const normalized = typeof input === "object" && input !== null && !Array.isArray(input)
+    ? Object.fromEntries(Object.entries(input).map(([key, value]) => [key, value === "" ? undefined : value]))
+    : input;
+  return Object.freeze(apiEnvironmentSchema.parse(normalized));
+};
