@@ -31,9 +31,15 @@ export const createStoryAgentProviderRouter = ({ config, createClient, logger, c
       try { const result = await createClient(provider).complete({ messages }); succeed(state); return result; }
       catch (error: unknown) {
         if (!isStoryAgentProviderError(error)) throw error;
-        if (error.kind === "auth") { state.trialInFlight = false; logger.warn("Story Agent provider authentication failed; skipping provider.", { provider: name, status: error.status }); continue; }
+        if (error.kind === "auth") {
+          fail(name, state);
+          logger.warn("Story Agent provider authentication failed; trying the next provider.", { provider: name, status: error.status });
+          continue;
+        }
         if (error.kind === "retryable") { fail(name, state); continue; }
-        state.trialInFlight = false; throw error;
+        fail(name, state);
+        logger.warn("Story Agent rejected the request; trying the next provider.", { provider: name, status: error.status });
+        continue;
       }
     }
     throw unavailable("providers_unavailable", "All Story Agent providers are unavailable.");
