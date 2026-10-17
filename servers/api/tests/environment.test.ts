@@ -68,7 +68,7 @@ void test("requires runtime values from the environment", () => {
 });
 
 
-void test("loads legacy fallback and Ollama aliases without duplicate provider names", () => {
+void test("loads the named, legacy fallback, and Ollama alias providers", () => {
   const environment = readApiEnvironment({
     NODE_ENV: "test", API_HOST: "127.0.0.1", API_PORT: "4000", WEB_ORIGIN: "http://localhost:3000", LOG_LEVEL: "silent",
     LLM_PROVIDERS: "groq,gemini,ollama",
@@ -81,6 +81,7 @@ void test("loads legacy fallback and Ollama aliases without duplicate provider n
   assert.deepEqual(readProviderConfigs(environment).map(({ name, model }) => ({ name, model })), [
     { name: "groq", model: "groq-model" },
     { name: "gemini", model: "gemini-model" },
+    { name: "fallback", model: "duplicate-model" },
     { name: "ollama", model: "ollama-model" }
   ]);
 });
