@@ -1,0 +1,127 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import type { ProviderConfig } from "../../../types/index.js";
+import {
+  createStoryAgentProviderRouter,
+  isStoryAgentRouterError,
+  type StoryAgentProviderProfile
+} from "../story-agent.router.js";
+import type {
+  StoryAgentProviderClient,
+  StoryAgentProviderError,
+  StoryAgentProviderResult
+} from "../story-agent.integration.js";
+
+const provider = (name: string): ProviderConfig => ({ name, baseUrl: `https://${name}.example.test/v1`, apiKey: "test-key", model: "test", timeoutMs: 100 });
+const result = (name: string): StoryAgentProviderResult => ({
+  text: "{}", usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, provider: name, model: "test"
+});
+const providerError = (kind: StoryAgentProviderError["kind"]): StoryAgentProviderError => Object.assign(new Error(kind), { kind });
+const routes = (names: readonly string[]): Readonly<Record<StoryAgentProviderProfile, readonly string[]>> => ({ fast: names, generate: names, tools: names });
+
+void test("fails over retryable provider failures and skips authentication failures", async () => {
+  const calls: string[] = [];
+  const warnings: string[] = [];
+  const router = createStoryAgentProviderRouter({
+    config: { providers: [provider("gemini"), provider("groq")], routes: routes(["gemini", "groq"]), cooldownMs: 100 },
+    createClient: (config): StoryAgentProviderClient => ({
+      complete: async () => {
+        await Promise.resolve();
+        calls.push(config.name);
+        if (config.name === "gemini") throw providerError("auth");
+        return result(config.name);
+      }
+    }),
+    logger: { warn: (message): void => { warnings.push(message); } },
+    clock: { now: () => 0 }
+  });
+
+  const completion = await router.complete({ profile: "generate", messages: [] });
+
+  assert.equal(completion.provider, "groq");
+  assert.deepEqual(calls, ["gemini", "groq"]);
+  assert.equal(warnings.length, 1);
+});
+
+void test("opens a circuit after two failures, then permits one cooldown trial", async () => {
+  let now = 0;
+  let shouldSucceed = false;
+  let calls = 0;
+  const router = createStoryAgentProviderRouter({
+    config: { providers: [provider("gemini")], routes: routes(["gemini"]), cooldownMs: 100 },
+    createClient: (): StoryAgentProviderClient => ({
+      complete: async () => {
+        await Promise.resolve();
+        calls += 1;
+        if (!shouldSucceed) throw providerError("retryable");
+        return result("gemini");
+      }
+    }),
+    logger: { warn: (): void => undefined },
+    clock: { now: () => now }
+  });
+
+  await assert.rejects(() => router.complete({ profile: "fast", messages: [] }));
+  await assert.rejects(() => router.complete({ profile: "fast", messages: [] }));
+  await assert.rejects(() => router.complete({ profile: "fast", messages: [] }));
+  assert.equal(calls, 2);
+
+  now = 100;
+  shouldSucceed = true;
+  assert.equal((await router.complete({ profile: "fast", messages: [] })).provider, "gemini");
+  assert.equal(calls, 3);
+});
+
+void test("reports missing and exhausted provider routes", async () => {
+  const dependencies = {
+    createClient: (): StoryAgentProviderClient => ({
+      complete: async () => {
+        await Promise.resolve();
+        return result("unused");
+      }
+    }),
+    logger: { warn: (): void => undefined },
+    clock: { now: () => 0 }
+  };
+
+  // Case 1: koi provider hi nahi
+  const noConfig = createStoryAgentProviderRouter({
+    config: { providers: [], routes: routes([]), cooldownMs: 100 },
+    ...dependencies
+  });
+
+  // Case 2: provider hai, lekin us profile ka route empty
+  const noRoute = createStoryAgentProviderRouter({
+    config: { providers: [provider("gemini")], routes: routes([]), cooldownMs: 100 },
+    ...dependencies
+  });
+
+  // Case 3: provider route me hai, lekin sab fail ho gaye
+  const allFailed = createStoryAgentProviderRouter({
+    config: { providers: [provider("gemini")], routes: routes(["gemini"]), cooldownMs: 100 },
+    createClient: (): StoryAgentProviderClient => ({
+      complete: async () => {
+        await Promise.resolve();
+        throw providerError("retryable");
+      }
+    }),
+    logger: { warn: (): void => undefined },
+    clock: { now: () => 0 }
+  });
+
+  // Assertions
+  await assert.rejects(
+    () => noConfig.complete({ profile: "tools", messages: [] }),
+    (error: unknown): boolean => isStoryAgentRouterError(error) && error.code === "no_provider_configured"
+  );
+
+  await assert.rejects(
+    () => noRoute.complete({ profile: "tools", messages: [] }),
+    (error: unknown): boolean => isStoryAgentRouterError(error) && error.code === "no_provider_configured"
+  );
+
+  await assert.rejects(
+    () => allFailed.complete({ profile: "tools", messages: [] }),
+    (error: unknown): boolean => isStoryAgentRouterError(error) && error.code === "providers_unavailable"
+  );
+});

@@ -1,0 +1,35 @@
+import type { LogLevel } from "@workspace/logging";
+import type { ApiEnvironment } from "@workspace/types";
+
+export type ApiEnvironmentSource = Readonly<Record<string, string | undefined>>;
+
+export type ValidatedApiEnvironment = Readonly<{
+  NODE_ENV: ApiEnvironment;
+  API_HOST: string;
+  API_PORT: number;
+  WEB_ORIGIN: string;
+  MONGODB_URI?: string | undefined;
+  LOG_LEVEL: LogLevel;
+  LLM_PROVIDERS?: string | undefined;
+  LLM_BASE_URL?: string | undefined;
+  LLM_API_KEY?: string | undefined;
+  LLM_MODEL?: string | undefined;
+  LLM_TIMEOUT_MS?: number | undefined;
+  LLM_GEMINI_BASE_URL?: string | undefined;
+  LLM_GEMINI_API_KEY?: string | undefined;
+  LLM_GEMINI_MODEL?: string | undefined;
+  LLM_GEMINI_TIMEOUT_MS?: number | undefined;
+  LLM_GROQ_BASE_URL?: string | undefined;
+  LLM_GROQ_API_KEY?: string | undefined;
+  LLM_GROQ_MODEL?: string | undefined;
+  LLM_GROQ_TIMEOUT_MS?: number | undefined;
+  LLM_OLLAMA_BASE_URL?: string | undefined;
+  LLM_OLLAMA_API_KEY?: string | undefined;
+  LLM_OLLAMA_MODEL?: string | undefined;
+  LLM_OLLAMA_TIMEOUT_MS?: number | undefined;
+  LLM_PROFILE_FAST?: string | undefined;
+  LLM_PROFILE_GENERATE?: string | undefined;
+  LLM_PROFILE_TOOLS?: string | undefined;
+  LLM_COOLDOWN_MS?: number | undefined;
+  QUEUE_INTERVAL_MS?: number | undefined;
+}>;

@@ -1,0 +1,37 @@
+import {
+  validateApiEnvironment
+} from "../validation/env.validation.js";
+import type { ApiEnvironmentSource, ValidatedApiEnvironment } from "../types/index.js";
+
+export const readApiEnvironment = (
+  source: ApiEnvironmentSource = process.env
+): ValidatedApiEnvironment => validateApiEnvironment({
+  NODE_ENV: source.NODE_ENV,
+  API_HOST: source.API_HOST,
+  API_PORT: source.API_PORT,
+  WEB_ORIGIN: source.WEB_ORIGIN,
+  MONGODB_URI: source.MONGODB_URI,
+  LOG_LEVEL: source.LOG_LEVEL,
+  LLM_PROVIDERS: source.LLM_PROVIDERS,
+  LLM_BASE_URL: source.LLM_BASE_URL,
+  LLM_API_KEY: source.LLM_API_KEY,
+  LLM_MODEL: source.LLM_MODEL,
+  LLM_TIMEOUT_MS: source.LLM_TIMEOUT_MS,
+  LLM_GEMINI_BASE_URL: source.LLM_GEMINI_BASE_URL,
+  LLM_GEMINI_API_KEY: source.LLM_GEMINI_API_KEY,
+  LLM_GEMINI_MODEL: source.LLM_GEMINI_MODEL,
+  LLM_GEMINI_TIMEOUT_MS: source.LLM_GEMINI_TIMEOUT_MS,
+  LLM_GROQ_BASE_URL: source.LLM_GROQ_BASE_URL,
+  LLM_GROQ_API_KEY: source.LLM_GROQ_API_KEY,
+  LLM_GROQ_MODEL: source.LLM_GROQ_MODEL,
+  LLM_GROQ_TIMEOUT_MS: source.LLM_GROQ_TIMEOUT_MS,
+  LLM_OLLAMA_BASE_URL: source.LLM_OLLAMA_BASE_URL,
+  LLM_OLLAMA_API_KEY: source.LLM_OLLAMA_API_KEY,
+  LLM_OLLAMA_MODEL: source.LLM_OLLAMA_MODEL,
+  LLM_OLLAMA_TIMEOUT_MS: source.LLM_OLLAMA_TIMEOUT_MS,
+  LLM_PROFILE_FAST: source.LLM_PROFILE_FAST,
+  LLM_PROFILE_GENERATE: source.LLM_PROFILE_GENERATE,
+  LLM_PROFILE_TOOLS: source.LLM_PROFILE_TOOLS,
+  LLM_COOLDOWN_MS: source.LLM_COOLDOWN_MS,
+  QUEUE_INTERVAL_MS: source.QUEUE_INTERVAL_MS
+});

@@ -1,0 +1,9 @@
+{
+  "dependencyAdvisories": [
+    {
+      "id": "GHSA-vfj7-8cjw-p6xm",
+      "expiresAt": "2027-01-01",
+      "reason": "Upstream not yet patched: latest published braces is 3.0.3 while the advisory declares 3.0.4. This is a dev-only transitive dependency through shadcn, fast-glob, and micromatch. Remove this exception when a patched braces release is published."
+    }
+  ]
+}
