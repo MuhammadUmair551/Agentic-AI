@@ -214,7 +214,7 @@ void test("generation and repair prompts specify every required Story field", as
     for (const field of ["title", "intent", "epic", "size", "acceptanceCriteria", "states", "dependsOn", "openQuestions", "sliceRationale"]) {
       assert.ok(prompt.includes(field), `prompt must explicitly require ${field}`);
     }
-    assert.match(prompt, /Return JSON only/);
+    assert.match(prompt, /Return (?:JSON only|one valid JSON object)/);
     assert.match(prompt, /Use \[\] for states, dependsOn, or openQuestions when empty/);
   }
 });
