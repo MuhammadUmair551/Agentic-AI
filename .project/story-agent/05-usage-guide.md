@@ -30,7 +30,7 @@ pnpm --dir servers/api exec tsx features/story-agent/story-agent.eval.ts
 
 The focused `tsx --test` command is the offline, repeatable Story Agent quality gate. It uses fake provider responses and no MongoDB, credentials, or network access. It proves pipeline contracts such as validation, bounded repair/no-partial output, budgets, failover, circuit cooldown, duplicate-title handling, and prompt-data delimiters. It does not measure a provider's current quality or availability.
 
-The evaluator is a separate live-provider command. Each fixture is classified as:
+The evaluator is a separate live-provider command. The generation and repair prompts include the complete required Story schema and an example; this improves compliance but cannot guarantee every free-tier model will follow it. The injection fixture accepts either a valid draft or an explicit, controlled refusal during clarification only when no partial stories are returned. Other malformed outputs remain quality failures. Each fixture is classified as:
 
 - `passed`: expected status and output contract were met.
 - `quality_failed`: a provider responded but the expected behavior or output contract was not met.
