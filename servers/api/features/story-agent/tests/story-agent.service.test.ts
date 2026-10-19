@@ -196,3 +196,25 @@ void test("prompt injection input retains the expected draft output shape", asyn
   assert.equal(Array.isArray(result.stories), true);
   assert.equal(result.stories?.[0]?.title, story.title);
 });
+
+
+void test("generation and repair prompts specify every required Story field", async () => {
+  const { build: buildGeneratePrompt } = await import("../story-agent.generate.prompt.js");
+  const { build: buildRepairPrompt } = await import("../story-agent.repair.prompt.js");
+  const clarifications = { questions: [], assumptions: ["Use a standard checkout flow."] };
+  const generatePrompt = buildGeneratePrompt({ requirement: "Create checkout stories", clarifications, existingTitles: [] });
+  const repairPrompt = buildRepairPrompt({
+    requirement: "Create checkout stories",
+    clarifications,
+    previousOutput: "{\\"stories\\":[]}",
+    validationErrors: ["stories.0.openQuestions: expected array"]
+  });
+
+  for (const prompt of [generatePrompt, repairPrompt]) {
+    for (const field of ["title", "intent", "epic", "size", "acceptanceCriteria", "states", "dependsOn", "openQuestions", "sliceRationale"]) {
+      assert.ok(prompt.includes(field), `prompt must explicitly require ${field}`);
+    }
+    assert.match(prompt, /Return JSON only/);
+    assert.match(prompt, /Use \[\] for states, dependsOn, or openQuestions when empty/);
+  }
+});
