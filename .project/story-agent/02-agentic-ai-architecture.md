@@ -1,103 +1,94 @@
-# Story Agent: Architecture (draft v0.3)
+# Story Agent architecture — v0.3 final
 
-Owner: Umair. Self-contained feature inside the new Squid codebase.
-Repo rules win over this doc: `AGENTS.md`, `CLAUDE.md`, `architecture.yaml`, `.agent/*`. If anything here conflicts with them, the coding agent must report the conflict, not choose silently.
-The old Squid docs are used only as a story-format reference and sample data.
+Status: implemented feature documentation, verified against repository files on 2026-10-19.
 
-## 1. Purpose and scope
+Repository rules in `AGENTS.md`, `CLAUDE.md`, `architecture.yaml`, and `.agent/` remain authoritative. Two referenced source documents (`01-*` and `03-*`) were not present in `.project/story-agent/` during this review; this document does not infer their contents.
 
-Input: a requirement (plus optional context). Output: either clarifying questions, or a draft set of stories (thin vertical slices, acceptance criteria, size), saved as a draft and visible in a UI.
+## Scope and composition
 
-**V1 in scope:** requirement -> clarify -> stories/slices/AC -> validate/repair -> save draft + run log (MongoDB Atlas) -> API -> UI with history.
-**V1 out of scope:** tasks and test-case generation, accept/reject workflow, tool calling, multi-agent, RAG, Redis, Docker, streaming, training anything. Quality bar: working.
+Story Agent is a feature-owned Express API plus an app-wide floating Next.js chat widget. It produces `questions`, `draft`, `failed`, or `queued`.
 
-## 2. Repo rules that shape it
-
-| Rule (AGENTS.md / CLAUDE.md) | Consequence |
-|---|---|
-| Feature-first, flat server feature files | `story-agent.route.ts / .controller.ts / .service.ts / .repository.ts / .validation.ts / .model.ts / .integration.ts`. No `domain/`. |
-| Functional style, explicit dependencies, no classes/DI/global state | Stages are `(input, deps) => result`. Model client and clock passed in. |
-| External systems behind `.integration.ts` | LLM provider only there. |
-| Contracts local until reused | Story schema stays in the feature (zod). |
-| Application work != foundation work | Never edit `codebase/`, `architecture.yaml`, `.agent/`, `AGENTS.md`, `CLAUDE.md`, `pnpm-workspace.yaml`. |
-| New dependency only with reason | Agent must ask first. |
-| pnpm; `pnpm run check/typecheck/lint/test/scan` | Each step ends with the smallest useful command. |
-
-## 3. Decisions (made; change only with a reason)
-
-| ID | Decision | Choice | Why |
-|---|---|---|---|
-| D1 | Where | Server feature `story-agent` + web page, in the existing server and web units (found by recon) | Feature-first rule; no new units unless recon shows none exist |
-| D2 | Model access | One **OpenAI-compatible chat-completions client**, configured only by env: `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL` | Many free providers and gateways speak this format; switching = changing env, not code. [Likely] |
-| D3 | Loop | Hand-written **repair loop**: generate -> validate in code -> send errors back -> retry max 2. No framework, no tool calling in V1 | Free models are weak at tool calling and JSON; code-side validation works with any model. [Likely] |
-| D4 | Storage | MongoDB Atlas: `story_agent_runs`, `story_agent_drafts`, via the repo's existing Mongo access pattern | Stated requirement; no Redis/Docker |
-| D5 | Quality bar | Working: valid draft or clear `questions`/`failed` status; eval prints valid-output rate on 5 samples | Stated requirement |
-
-## 4. Context
-
-```
-Person -> [Web page] -> [Story Agent API] -> Model provider (OpenAI-compatible, free)
-                               |-> MongoDB Atlas (runs, drafts)
-Person <- [Web page] <- questions | draft stories | failed + reason
+```text
+Web widget -> POST /story-agent/runs -> service pipeline -> provider router -> OpenAI-compatible provider
+                         |                    |                    |
+                         v                    v                    -> failover/circuit state (router closure)
+                    MongoDB runs/drafts <- queue worker retries queued work
 ```
 
-## 5. Pipeline (workflow + repair loop)
+The server composition factory is `servers/api/features/story-agent/index.ts`. `servers/api/server.ts` creates it only with `MONGODB_URI`, ensures indexes, registers route dependencies through `createApp`, and starts/stops the queue worker.
 
-| # | Stage | Kind | Does |
-|---|---|---|---|
-| 1 | Intake | code | Validate, length limits, run id |
-| 2 | Gather context | code | Optional context text + a limited list of existing story titles for duplicate check |
-| 3 | Clarify | model (JSON) | Blocking ambiguity -> status `questions`, stop. Else assumptions list |
-| 4 | Generate | model (JSON) | Stories: thin vertical slices, AC, size S/M/L, openQuestions, sliceRationale |
-| 5 | Validate | code | zod, >=1 AC, size, unique titles, no duplicates vs existing, max stories |
-| 6 | Repair loop | model | On failure send errors back, max 2 retries, else `failed`; never partial output |
-| 7 | Finalize | code | Save run + draft to Atlas, return result |
+## Actual files
 
-Budget per run: max model calls (~6), max total tokens, overall timeout. Exceeded -> `failed` (`over_budget`).
-Stretch (later): tool calling for context, critic pass, accept/reject.
+| Area | Files | Responsibility |
+|---|---|---|
+| Composition | `index.ts` | Wires repository, provider router/client, pipeline, queue, and route dependencies. |
+| HTTP | `routes/index.ts`, `routes/story-agent.route.ts`, `story-agent.controller.ts` | Express endpoints, request validation, response mapping. |
+| Pipeline | `story-agent.service.ts` | Intake, context selection, clarify, generate, validate, repair, usage/provider/stage ledger. |
+| Provider | `story-agent.integration.ts`, `story-agent.router.ts`, `story-agent.config.ts` | OpenAI-compatible completions, typed failures, profiles, failover, circuit breaker. |
+| Validation/prompts | `story-agent.validation.ts`, `story-agent.json.ts`, `story-agent.{clarify,generate,repair}.prompt.ts` | Zod, fenced JSON extraction, prompts; clarify prompt is version 2. |
+| Persistence/queue | `story-agent.repository.ts`, `story-agent.queue.ts` | Mongo collection/index access, atomic queue claim, retry worker. |
+| Evaluation/tests | `story-agent.eval.ts`, `tests/story-agent.*.test.ts` | Five live fixtures and fake-boundary tests. |
+| Web | `apps/web/features/story-agent/**`, `apps/web/app/layout.tsx` | Floating FAB, panel, chat, history, client, polling. |
 
-## 6. Contracts (shapes only)
+## API
 
-**Story:** `title ("A <role> <does> <outcome>") · intent · epic · size S|M|L · acceptanceCriteria[] · states[] · dependsOn[] · openQuestions[] · sliceRationale`
+Routes are registered only when Mongo persistence is configured.
 
-**API** (follow the repo's route, auth, error conventions; paths below are indicative):
-- `POST /story-agent/runs` `{requirement, context?}` -> `{runId, status: questions|draft|failed, questions? | stories? | error?, usage}`
-- `GET /story-agent/runs` (newest first, paginated, requirement preview)
-- `GET /story-agent/runs/:id` (run + draft)
+| Method/path | Request | Responses |
+|---|---|---|
+| `POST /story-agent/runs` | `{ "requirement": string, "context"?: string }` | `200` draft `{runId,status:"draft",stories,usage}`; `200` questions `{runId,status:"questions",questions,usage}`; `202` queued `{runId,status:"queued",message}`; `500` failed `{runId,status:"failed",error,usage}`; validation errors flow through API middleware (`400`); queue capacity >=20 returns `503`. |
+| `GET /story-agent/runs?limit=20&skip=0` | query optional; limit capped at 100 | `200 { runs }`, newest first. |
+| `GET /story-agent/runs/:id` | run ID | `200 { run, draft }`; `404` when absent. |
 
-**Collections:**
-- `story_agent_runs`: runId, requirement, context, status, model, promptVersions, attempts, usage{inputTokens, outputTokens, calls}, durationMs, validationErrors, error, createdAt
-- `story_agent_drafts`: runId, stories[], reviewStatus (`draft` only in V1), createdAt
-- Indexes: runId unique, createdAt desc
+Shared contracts: `packages/types/src/api/story-agent/story-agent.ts`. A story has title, intent, epic, `S|M|L` size, acceptance criteria, states, dependencies, open questions, and slice rationale.
 
-**Env:** `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`, optional `LLM_TIMEOUT_MS`; Mongo URI already exists in the repo. Names go in `.env.example`, values never in git.
+## MongoDB
 
-## 7. UI (V1)
+- `story_agent_runs`: runId, status, requirement, optional context, usage, providers, attempts, stages, validation errors, optional reason/error, queue schedule/lock fields, timestamps.
+- `story_agent_drafts`: runId, stories, createdAt.
+- Indexes: unique runId on both collections; descending run createdAt; run `{status,nextAttemptAt}`.
 
-One page: requirement + optional context, Generate button; loading state (calls can take up to ~60 s); error state; result as question list or story cards (title, intent, size badge, AC, slice rationale, open questions); run info (model, tokens, duration, attempts); history list and opening a past run; empty state. Layout is proposed by the coding agent and approved by Umair before building. Follows `.agent/instructions/ui-composition.md` (shadcn, Tailwind).
+`QUEUE_INTERVAL_MS` defaults to 120000 ms. The worker atomically claims one eligible run, locks it five minutes, increments `queueAttempts`, and processes one at a time. Draft/questions persist final results; provider unavailability reschedules; other failures fail; five queue attempts or expiry fail with `expired`.
 
-## 8. Rubric (what a good story is)
+## Providers, budgets, and failure behavior
 
-One actor, one outcome. Demonstrable on its own (vertical, not "build the table"). Testable AC. Size fits. No duplicates. No invented requirements: unknowns become assumptions/open questions.
+The integration posts to `${baseUrl}/chat/completions`. 429/5xx/transport/timeout are retryable; 401/403 are auth; remaining HTTP failures are bad request. Named providers are `gemini`, `groq`, `ollama`; legacy, fallback, and Ollama aliases are also recognized when complete.
 
-## 9. Failure branches
+Profiles are `fast`, `generate`, `tools`, defaulting to configured providers unless profile variables override them. The router fails over in profile order and opens a circuit after two failures for `LLM_COOLDOWN_MS` (default 60000 ms), then allows one trial. Provider exhaustion becomes `providers_unavailable`, which the pipeline returns as `queued`.
 
-| Failure | Behaviour |
+Feature limits: max 6 model calls, 12000 total tokens, 60000 ms elapsed, 6000 context tokens, 10 stories. Provider timeout defaults to 30000 ms. Flow: clarify (`fast`), generate (`generate`), then at most two repairs. Permanent invalid output is `failed`/`validation_failed`; no partial stories are returned.
+
+## Validation and safety
+
+- Requirement: 1–4000 trimmed chars; context: optional, <=8000 chars.
+- Supplied existing context uses titles only, keyword-overlap ranking, and context budget.
+- Stories require 1–20 AC; duplicates in output or supplied titles fail validation.
+- Requirement/context are delimited prompt data; prompts say not to execute embedded instructions. Markdown-fenced JSON is extracted then Zod-validated.
+- Keys are environment values only; documentation uses placeholders.
+
+## Environment
+
+API baseline: `NODE_ENV`, `API_HOST`, `API_PORT`, `WEB_ORIGIN`, `LOG_LEVEL`. Story Agent API/worker additionally require `MONGODB_URI`.
+
+| Configuration | Variables |
 |---|---|
-| Ambiguous requirement | Status `questions`, no stories |
-| Invalid output after 2 repairs | `failed`, reason, nothing partial |
-| Over budget / timeout | `failed` (`over_budget`) |
-| Provider 429/5xx | Bounded retry with backoff, then `failed`; run still saved |
-| Oversized/empty input | Rejected at intake |
+| Named list | `LLM_PROVIDERS=gemini,groq,ollama`; matching `LLM_<NAME>_BASE_URL`, `_API_KEY`, `_MODEL`, optional `_TIMEOUT_MS` |
+| Legacy | `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`, optional `LLM_TIMEOUT_MS` |
+| Fallback | `FALLBACK_LLM_BASE_URL`, `_API_KEY`, `_MODEL` |
+| Ollama aliases | `OLLAMA_BASE_FREE_URL`, `OLLAMA_API_KEY`, `OLLAMA_FREE_MODEL` |
+| Routing | `LLM_PROFILE_FAST`, `LLM_PROFILE_GENERATE`, `LLM_PROFILE_TOOLS`, `LLM_COOLDOWN_MS` |
+| Queue | `QUEUE_INTERVAL_MS` (default 120000) |
 
-## 10. Security
+Web requires `NEXT_PUBLIC_API_BASE_URL`.
 
-Requirement and context are data, never instructions: delimit in prompts. Keys only from env; never logged or committed (`pnpm run scan` checks). Output validated before it is saved or returned. No stack traces in errors.
+## Evidence, gaps, and V2
 
-## 11. Risks
+Offline tests cover provider integration/router, service draft/questions/concise meaningful intake/repair/permanent validation failure/duplicate-title rejection/token and elapsed-time budgets/provider-unavailable/context/injection/oversized input, repository, queue, validation, and HTTP mapping. They use fakes and are the required repeatable quality gate; they do not measure live-provider quality.
 
-1. Free-tier limits/outages (429s) -> bounded retry, model swap by env.
-2. Weak JSON from free models -> extract + zod + repair loop.
-3. Coding agent drifting outside scope -> scope guard in every prompt, review the diff.
-4. Scope creep -> V1 stops at draft + UI.
-5. Repo reality differs from this doc -> recon prompt first.
+Live eval has five fixtures (clear, ambiguous, existing-title, long, injection), is sequential, and pauses eight seconds between fixtures. It reports `passed` when expected behavior and output validation succeed, `quality_failed` when a provider response cannot meet the expected contract, and `inconclusive` when provider capacity/configuration prevents a meaningful result (including queued `providers_unavailable`). It exits 0 for all-pass, 1 for one or more quality failures, and 2 for inconclusive-only runs. On 2026-10-17, three Groq evaluations consistently returned a clear requirement as `draft` and ambiguous as `questions`; later fixtures could be `queued` after quota/circuit cooldown. No quota-free live-eval claim is made.
+
+Known gaps: provider quota can queue eval work; UI submits requirement only although API supports context; no accept/reject draft workflow; live Mongo + real-provider E2E remains manual.
+
+V2 candidates (not implemented): live context tool calling, critic/reviewer pass, accept/reject workflow, task/test-case generation.
+
+Top risks: provider quota/outage (add paced eval/provider capacity); weak model JSON (add critic/eval scoring); incomplete context (bounded, auditable retrieval/tool calling).

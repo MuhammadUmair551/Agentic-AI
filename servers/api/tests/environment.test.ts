@@ -81,8 +81,8 @@ void test("loads the named, legacy fallback, and Ollama alias providers", () => 
   assert.deepEqual(readProviderConfigs(environment).map(({ name, model }) => ({ name, model })), [
     { name: "groq", model: "groq-model" },
     { name: "gemini", model: "gemini-model" },
+    { name: "ollama", model: "ollama-model" },
     { name: "fallback", model: "duplicate-model" },
-    { name: "ollama", model: "ollama-model" }
   ]);
 });
 
