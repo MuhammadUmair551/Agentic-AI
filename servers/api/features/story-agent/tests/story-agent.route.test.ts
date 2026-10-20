@@ -52,6 +52,7 @@ const request = async (pipeline: StoryAgentPipelineResult): Promise<Readonly<{ r
   const address = server.address();
   assert.ok(address && typeof address === "object");
   const response = await fetch(`http://127.0.0.1:${String(address.port)}/story-agent/runs`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ requirement: "Create stories" }) });
+  server.closeAllConnections();
   await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   return { response, saved };
 };
@@ -88,6 +89,7 @@ void test("POST rejects invalid request bodies", async () => {
   const address = server.address();
   assert.ok(address && typeof address === "object");
   const response = await fetch(`http://127.0.0.1:${String(address.port)}/story-agent/runs`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ requirement: "" }) });
+  server.closeAllConnections();
   await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   assert.equal(response.status, 400);
   assert.equal(saved.length, 0);

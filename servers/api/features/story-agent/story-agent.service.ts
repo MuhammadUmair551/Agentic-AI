@@ -33,7 +33,11 @@ const clarifyResponseSchema = z.object({
   questions: z.array(z.string().trim().min(1)).default([]),
   assumptions: z.array(z.string().trim().min(1)).default([])
 });
+const refusalSchema = z.object({ refusal: z.object({ reason: z.string().trim().min(1).max(1_000) }) });
 const generatedStoriesSchema = z.object({ stories: z.array(storySchema) });
+const maxRepairOutputCharacters = 12_000;
+const maxRepairErrors = 10;
+const maxRepairErrorCharacters = 500;
 const emptyUsage = (): StoryAgentUsage => ({ inputTokens: 0, outputTokens: 0, totalTokens: 0 });
 const emptyLedger = (): CompletionLedger => ({ calls: 0, usage: emptyUsage(), providers: [], stages: [] });
 const normalizeTitle = (value: string): string => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -120,7 +124,10 @@ const request = async (
     if (runtimeBudgetExceeded(ledger, startedAt, dependencies)) return result(ledger, "failed", [], { reason: "over_budget" });
     return { text: completion.text };
   } catch (error: unknown) {
-    if (isStoryAgentRouterError(error) && error.code === "providers_unavailable") return result(ledger, "queued", [], { reason: error.code });
+    if (isStoryAgentRouterError(error)) {
+      if (error.code === "providers_unavailable") return result(ledger, "queued", [], { reason: error.code });
+      return result(ledger, "failed", [], { reason: error.code });
+    }
     ledger.stages.push(stage(name, "failed", error instanceof Error ? error.message : "Provider request failed."));
     return result(ledger, "failed", [], { reason: error instanceof Error ? error.message : "provider_failed" });
   }
@@ -147,14 +154,19 @@ export const createStoryAgentService = (dependencies: PipelineDependencies) => (
     if (isPipelineResult(clarify)) return clarify;
     let clarifications: StoryAgentClarifications;
     try {
-      const parsed = clarifyResponseSchema.parse(extractJson(clarify.text));
+      const clarificationOutput = extractJson(clarify.text);
+      if (refusalSchema.safeParse(clarificationOutput).success) {
+        ledger.stages.push(stage("clarify", "failed", "Model refused request."));
+        return result(ledger, "failed", [], { reason: "model_refusal" });
+      }
+      const parsed = clarifyResponseSchema.parse(clarificationOutput);
       clarifications = clarificationsSchema.parse({ questions: parsed.questions, assumptions: parsed.assumptions });
       if (parsed.needsClarification && clarifications.questions.length > 0) {
         return result(ledger, "questions", [], { questions: clarifications.questions });
       }
-    } catch (error: unknown) {
+    } catch {
       ledger.stages.push(stage("clarify", "failed", "Invalid clarification output."));
-      return result(ledger, "failed", [], { reason: error instanceof Error ? error.message : "invalid_clarification_output" });
+      return result(ledger, "failed", [], { reason: "invalid_clarification_output" });
     }
 
     let generated = await request("generate", "generate", generatePrompt.build({
@@ -168,12 +180,21 @@ export const createStoryAgentService = (dependencies: PipelineDependencies) => (
     for (let repair = 0; repair <= 2; repair += 1) {
       let candidate: unknown;
       try { candidate = extractJson(generated.text); } catch { candidate = undefined; }
+      if (refusalSchema.safeParse(candidate).success) {
+        ledger.stages.push(stage("validate", "failed", "Model refused request."));
+        return result(ledger, "failed", [], { reason: "model_refusal" });
+      }
       const stories = isObjectWithStories(candidate) ? candidate.stories : undefined;
       errors = validateStories(stories, gathered.titles, dependencies.budget.maxStories);
       if (errors.length === 0) return result(ledger, "draft", [], { stories: generatedStoriesSchema.parse(candidate).stories });
       ledger.stages.push(stage("validate", "failed", errors.join("; ")));
       if (repair === 2) return result(ledger, "failed", errors, { reason: "validation_failed" });
-      generated = await request("repair", "generate", repairPrompt.build({ requirement: accepted.requirement, clarifications, previousOutput: generated.text, validationErrors: errors }), ledger, startedAt, dependencies);
+      generated = await request("repair", "generate", repairPrompt.build({
+        requirement: accepted.requirement,
+        clarifications,
+        previousOutput: generated.text.slice(0, maxRepairOutputCharacters),
+        validationErrors: errors.slice(0, maxRepairErrors).map((error) => error.slice(0, maxRepairErrorCharacters))
+      }), ledger, startedAt, dependencies);
       if (isPipelineResult(generated)) return generated;
     }
     return result(ledger, "failed", errors, { reason: "validation_failed" });
