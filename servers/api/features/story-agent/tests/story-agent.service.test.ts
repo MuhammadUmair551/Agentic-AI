@@ -261,11 +261,15 @@ for (const eCommerceCase of eCommerceCases) {
 
     assert.equal(result.status, "draft");
     assert.equal(result.attempts, 2);
-    assert.equal(result.stories?.length, 1);
-    assert.deepEqual(storySchema.parse(result.stories?.[0]), eCommerceCase.story);
-    assert.equal(result.stories?.[0]?.acceptanceCriteria.length, 1);
-    assert.ok(!result.stories?.[0]?.title.includes("database"));
-    assert.ok(!result.stories?.[0]?.title.includes("API"));
+    const stories = result.stories;
+    if (stories === undefined) assert.fail("Draft result must include stories.");
+    assert.equal(stories.length, 1);
+    const generatedStory = stories[0];
+    assert.ok(generatedStory !== undefined);
+    assert.deepEqual(storySchema.parse(generatedStory), eCommerceCase.story);
+    assert.equal(generatedStory.acceptanceCriteria.length, 1);
+    assert.ok(!generatedStory.title.includes("database"));
+    assert.ok(!generatedStory.title.includes("API"));
   });
 }
 
