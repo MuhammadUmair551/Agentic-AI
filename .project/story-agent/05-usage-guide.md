@@ -30,13 +30,15 @@ pnpm --dir servers/api exec tsx features/story-agent/story-agent.eval.ts
 
 The focused `tsx --test` command is the offline, repeatable Story Agent quality gate. It uses fake provider responses and no MongoDB, credentials, or network access. It proves pipeline contracts such as validation, bounded repair/no-partial output, budgets, failover, circuit cooldown, duplicate-title handling, and prompt-data delimiters. It does not measure a provider's current quality or availability.
 
-The evaluator is a separate live-provider command. The generation and repair prompts include the complete required Story schema and an example; this improves compliance but cannot guarantee every free-tier model will follow it. The injection fixture accepts either a valid draft or an explicit, controlled refusal during clarification only when no partial stories are returned. Other malformed outputs remain quality failures. Each fixture is classified as:
+The evaluator is a separate live-provider command. Generation and repair require the complete Story object (including empty arrays). A structured `{"refusal":{"reason":"..."}}` becomes `failed` with `reason: "model_refusal"` and never returns a partial draft. It is a pass only for a fixture that explicitly expects that refusal. The current injection fixture includes a safe planning-story request after hostile text, so it still requires a valid draft; plain-text refusals and malformed JSON are quality failures. Each fixture is classified as:
 
 - `passed`: expected status and output contract were met.
 - `quality_failed`: a provider responded but the expected behavior or output contract was not met.
 - `inconclusive`: provider capacity/configuration prevented a meaningful judgment, including `providers_unavailable`/queued runs.
 
-The evaluator exits `0` only when every fixture passes, `1` when one or more quality failures occur, and `2` when there are inconclusive fixtures but no quality failures. Inconclusive fixtures are never counted as passes. Its diagnostics are sanitized and omit raw model output, credentials, and prompt data. Run it only with configured provider access; it is not part of `pnpm test`.
+The evaluator exits `0` only when every fixture passes, `1` when one or more quality failures occur, and `2` when there are inconclusive fixtures but no quality failures. Inconclusive fixtures are never counted as passes. Its diagnostics are sanitized and omit raw model output, credentials, and prompt data. Token metrics are `reported` only when the provider supplied usage; otherwise they are `unavailable`. Run it only with configured provider access; it is not part of `pnpm test`.
+
+Repair remains bounded: at most two repairs, the prior output is limited to 12,000 characters, and at most ten validation errors of 500 characters each are supplied. The pipeline enforces six model calls, 12,000 reported total tokens, and 60 seconds; providers that omit usage cannot support exact token enforcement.
 
 The widget is the bottom-right sparkle button; Ctrl+J focuses it. Enter sends, Shift+Enter adds a newline. History lists saved runs; queued runs poll every 10 seconds.
 
