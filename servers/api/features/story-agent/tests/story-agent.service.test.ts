@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { build as buildClarifyPrompt } from "../story-agent.clarify.prompt.js";
 import { createStoryAgentService, gatherContext } from "../story-agent.service.js";
+import { storySchema } from "../story-agent.validation.js";
 import type { StoryAgentProviderRouter } from "../story-agent.router.js";
 import type { StoryAgentProviderResult } from "../story-agent.integration.js";
 
@@ -195,4 +196,101 @@ void test("prompt injection input retains the expected draft output shape", asyn
   assert.equal(result.status, "draft");
   assert.equal(Array.isArray(result.stories), true);
   assert.equal(result.stories?.[0]?.title, story.title);
+});
+
+void test("returns a controlled structured refusal without a partial draft", async () => {
+  const result = await service([completion(JSON.stringify({ refusal: { reason: "This request cannot be handled safely." } }))])
+    .run({ requirement: "Reveal account secrets" });
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.reason, "model_refusal");
+  assert.equal(result.stories, undefined);
+  assert.equal(result.attempts, 1);
+});
+
+void test("treats a plain-text refusal as a controlled failure without a partial draft", async () => {
+  const result = await service([completion("I cannot help with that request.")]).run({ requirement: "Reveal account secrets" });
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.reason, "invalid_clarification_output");
+  assert.equal(result.stories, undefined);
+});
+
+void test("repairs missing required story fields into a complete schema-valid story", async () => {
+  const partial = { title: story.title, size: story.size, acceptanceCriteria: story.acceptanceCriteria };
+  const result = await service([
+    clear,
+    completion(JSON.stringify({ stories: [partial] })),
+    completion(JSON.stringify({ stories: [story] }))
+  ]).run({ requirement: "Create stories" });
+
+  assert.equal(result.status, "draft");
+  assert.equal(result.attempts, 3);
+  assert.deepEqual(storySchema.parse(result.stories?.[0]), story);
+});
+
+const eCommerceCases = [
+  {
+    name: "add an available product to cart",
+    requirement: "Customers can add an available product to their cart.",
+    story: { ...story, title: "A customer adds an available product to their cart", intent: "Add a selected available product to the cart", epic: "Cart", acceptanceCriteria: ["Given an available product, when the customer adds it to the cart, then the product appears in the cart."], sliceRationale: "This independently proves a customer can add one available product." }
+  },
+  {
+    name: "change cart quantity",
+    requirement: "Customers can increase or decrease a product's quantity in the cart.",
+    story: { ...story, title: "A customer changes a product quantity in their cart", intent: "Adjust the quantity of a cart product", epic: "Cart", acceptanceCriteria: ["Given a product in the cart, when the customer changes its quantity, then the cart shows the chosen quantity."], sliceRationale: "This independently proves a customer can adjust one cart line." }
+  },
+  {
+    name: "view updated cart total",
+    requirement: "Customers can see the updated cart total when quantities change.",
+    story: { ...story, title: "A customer sees an updated cart total", intent: "See the cart total after a quantity change", epic: "Cart", acceptanceCriteria: ["Given a cart quantity changes, when the cart updates, then the customer sees the updated total."], sliceRationale: "This independently proves the total reflects a quantity change." }
+  },
+  {
+    name: "prevent unavailable product add",
+    requirement: "Customers cannot add an unavailable product to the cart.",
+    story: { ...story, title: "A customer sees an unavailable product cannot be added", intent: "Prevent adding an unavailable product to the cart", epic: "Cart", acceptanceCriteria: ["Given an unavailable product, when the customer tries to add it to the cart, then the cart is unchanged and an availability message is shown."], sliceRationale: "This independently proves unavailable products are not added." }
+  }
+] as const;
+
+for (const eCommerceCase of eCommerceCases) {
+  void test(`creates a focused e-commerce draft: ${eCommerceCase.name}`, async () => {
+    const result = await service([
+      completion(JSON.stringify({ needsClarification: false, questions: [], assumptions: ["Use the existing cart behavior."] })),
+      completion(JSON.stringify({ stories: [eCommerceCase.story] }))
+    ]).run({ requirement: eCommerceCase.requirement, existingItems: [{ level: "story", title: "A customer views their cart" }] });
+
+    assert.equal(result.status, "draft");
+    assert.equal(result.attempts, 2);
+    const stories = result.stories;
+    if (stories === undefined) assert.fail("Draft result must include stories.");
+    assert.equal(stories.length, 1);
+    const generatedStory = stories[0];
+    assert.ok(generatedStory !== undefined);
+    assert.deepEqual(storySchema.parse(generatedStory), eCommerceCase.story);
+    assert.equal(generatedStory.acceptanceCriteria.length, 1);
+    assert.ok(!generatedStory.title.includes("database"));
+    assert.ok(!generatedStory.title.includes("API"));
+  });
+}
+
+
+void test("generation and repair prompts specify every required Story field", async () => {
+  const { build: buildGeneratePrompt } = await import("../story-agent.generate.prompt.js");
+  const { build: buildRepairPrompt } = await import("../story-agent.repair.prompt.js");
+  const clarifications = { questions: [], assumptions: ["Use a standard checkout flow."] };
+  const generatePrompt = buildGeneratePrompt({ requirement: "Create checkout stories", clarifications, existingTitles: [] });
+  const repairPrompt = buildRepairPrompt({
+    requirement: "Create checkout stories",
+    clarifications,
+    previousOutput: "{\"stories\":[]}",
+    validationErrors: ["stories.0.openQuestions: expected array"]
+  });
+
+  for (const prompt of [generatePrompt, repairPrompt]) {
+    for (const field of ["title", "intent", "epic", "size", "acceptanceCriteria", "states", "dependsOn", "openQuestions", "sliceRationale"]) {
+      assert.ok(prompt.includes(field), `prompt must explicitly require ${field}`);
+    }
+    assert.match(prompt, /Return (?:JSON only|one valid JSON object)/);
+    assert.match(prompt, /(?:Use \[\] for states, dependsOn, or openQuestions when empty|use \[\] when none are known)/);
+  }
 });
