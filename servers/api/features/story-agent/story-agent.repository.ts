@@ -7,6 +7,8 @@ export type StoryAgentRunDocument = Readonly<Record<string, unknown>> & Readonly
   status: StoryAgentRunStatus;
   requirement: string;
   context?: string | undefined;
+  questions?: readonly string[] | undefined;
+  stories?: readonly StoryAgentStory[] | undefined;
   usage: StoryAgentUsage;
   providers: readonly string[];
   attempts: number;

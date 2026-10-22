@@ -62,6 +62,30 @@ void test("POST saves and returns a draft", async () => {
   assert.equal(outcome.response.status, 200);
   assert.equal((await outcome.response.json() as { status: string }).status, "draft");
   assert.equal(outcome.saved.length, 2);
+  assert.deepEqual((outcome.saved[0] as { stories?: unknown[] }).stories, [story]);
+});
+
+void test("POST persists question payloads for history restoration", async () => {
+  const saved: unknown[] = [];
+  const app = express();
+  app.use(express.json());
+  app.use(createStoryAgentRoutes({
+    db,
+    logger,
+    clock: { now: () => 0 },
+    repository: createRepository(saved),
+    service: { run: async () => ({ status: "questions", attempts: 1, usage, providers: ["gemini"], stages: [], validationErrors: [], questions: ["Who is the actor?"] }) }
+  }));
+  app.use(createErrorHandler({ logger }));
+  const server = createServer(app);
+  await new Promise<void>((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); });
+  const address = server.address();
+  assert.ok(address && typeof address === "object");
+  const response = await fetch(`http://127.0.0.1:${String(address.port)}/story-agent/runs`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ requirement: "Create stories" }) });
+  server.closeAllConnections();
+  await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  assert.equal(response.status, 200);
+  assert.deepEqual((saved[0] as { questions?: string[] }).questions, ["Who is the actor?"]);
 });
 
 void test("POST saves queued runs and returns 202", async () => {

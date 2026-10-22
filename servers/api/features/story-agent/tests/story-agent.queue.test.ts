@@ -45,3 +45,30 @@ void test("expires a run after five queue attempts", async () => {
   assert.equal(updates[0]?.status, "failed");
   assert.equal((updates[0]?.extra as { reason?: string }).reason, "expired");
 });
+
+void test("preserves generated stories and clarification questions when queued work resolves", async () => {
+  const updates: Array<{ status: string; extra: unknown }> = [];
+  const queue = createStoryAgentQueue({
+    repository: repository(queuedRun(), updates),
+    service: { run: async () => ({ status: "questions", questions: ["Who is the actor?"], attempts: 1, usage, providers: ["gemini"], stages: [], validationErrors: [] }) },
+    logger,
+    clock: { now: () => 0 },
+    intervalMs: 120_000
+  });
+
+  await queue.processNext();
+  assert.equal(updates[0]?.status, "questions");
+  assert.deepEqual((updates[0]?.extra as { questions?: string[] }).questions, ["Who is the actor?"]);
+
+  const draftQueue = createStoryAgentQueue({
+    repository: repository(queuedRun(), updates),
+    service: { run: async () => ({ status: "draft", stories: [{ title: "Cart story", intent: "Add items", epic: "Cart", size: "S", acceptanceCriteria: ["An item can be added."], states: [], dependsOn: [], openQuestions: [], sliceRationale: "Adds the feature." }], attempts: 1, usage, providers: ["gemini"], stages: [], validationErrors: [] }) },
+    logger,
+    clock: { now: () => 0 },
+    intervalMs: 120_000
+  });
+
+  await draftQueue.processNext();
+  assert.equal(updates[1]?.status, "draft");
+  assert.deepEqual((updates[1]?.extra as { stories?: unknown[] }).stories, [{ title: "Cart story", intent: "Add items", epic: "Cart", size: "S", acceptanceCriteria: ["An item can be added."], states: [], dependsOn: [], openQuestions: [], sliceRationale: "Adds the feature." }]);
+});

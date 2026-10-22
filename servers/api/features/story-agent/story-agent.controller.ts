@@ -15,21 +15,30 @@ const toIso = (value: number): string => new Date(value).toISOString();
 const queuedRetryDelayMs = 2 * 60 * 1_000;
 const queuedExpiryMs = 30 * 60 * 1_000;
 
-const runDocument = (runId: string, input: Readonly<{ requirement: string; context?: string | undefined }>, pipeline: StoryAgentPipelineResult, now: number): StoryAgentRunDocument => ({
-  runId,
-  status: pipeline.status,
-  requirement: input.requirement,
-  ...(input.context ? { context: input.context } : {}),
-  usage: pipeline.usage,
-  providers: pipeline.providers,
-  attempts: pipeline.attempts,
-  stages: pipeline.stages,
-  validationErrors: pipeline.validationErrors,
-  ...(pipeline.reason ? { reason: pipeline.reason, error: pipeline.reason } : {}),
-  ...(pipeline.status === "queued" ? { nextAttemptAt: toIso(now + queuedRetryDelayMs), expiresAt: toIso(now + queuedExpiryMs) } : {}),
-  createdAt: toIso(now),
-  updatedAt: toIso(now)
-});
+const runDocument = (runId: string, input: Readonly<{ requirement: string; context?: string | undefined }>, pipeline: StoryAgentPipelineResult, now: number): StoryAgentRunDocument => {
+  const errorMessage = pipeline.status === "failed"
+    ? pipeline.validationErrors[0] ?? pipeline.reason ?? "Story generation failed."
+    : pipeline.reason;
+
+  return {
+    runId,
+    status: pipeline.status,
+    requirement: input.requirement,
+    ...(input.context ? { context: input.context } : {}),
+    ...(pipeline.questions ? { questions: pipeline.questions } : {}),
+    ...(pipeline.stories ? { stories: pipeline.stories } : {}),
+    usage: pipeline.usage,
+    providers: pipeline.providers,
+    attempts: pipeline.attempts,
+    stages: pipeline.stages,
+    validationErrors: pipeline.validationErrors,
+    ...(pipeline.reason ? { reason: pipeline.reason } : {}),
+    ...(errorMessage ? { error: errorMessage } : {}),
+    ...(pipeline.status === "queued" ? { nextAttemptAt: toIso(now + queuedRetryDelayMs), expiresAt: toIso(now + queuedExpiryMs) } : {}),
+    createdAt: toIso(now),
+    updatedAt: toIso(now)
+  };
+};
 
 export const createStoryAgentController = ({ repository, service, clock, createRunId = randomUUID }: ControllerDependencies) => ({
   createRun: async (request: Request, response: JsonResponse, next: NextFunction): Promise<void> => {
@@ -72,32 +81,32 @@ export const createStoryAgentController = ({ repository, service, clock, createR
     }
   },
   getRun: async (request: Request, response: JsonResponse, next: NextFunction): Promise<void> => {
-  try {
-    const runIdParam = request.params.id;
-    const runId = Array.isArray(runIdParam) ? runIdParam[0] : runIdParam;
-    if (!runId) {
-      next(createApplicationError({
-        code: ERROR_CODES.routeNotFound,
-        message: ERROR_MESSAGES.routeNotFound,
-        status: HTTP_STATUS.notFound,
-        details: { path: "story-agent/runs" }
-      }));
-      return;
+    try {
+      const runIdParam = request.params.id;
+      const runId = Array.isArray(runIdParam) ? runIdParam[0] : runIdParam;
+      if (!runId) {
+        next(createApplicationError({
+          code: ERROR_CODES.routeNotFound,
+          message: ERROR_MESSAGES.routeNotFound,
+          status: HTTP_STATUS.notFound,
+          details: { path: "story-agent/runs" }
+        }));
+        return;
+      }
+      const run = await repository.getRun(runId);
+      if (!run) {
+        next(createApplicationError({
+          code: ERROR_CODES.routeNotFound,
+          message: ERROR_MESSAGES.routeNotFound,
+          status: HTTP_STATUS.notFound,
+          details: { path: `story-agent/runs/${runId}` }
+        }));
+        return;
+      }
+      const draft = await repository.getDraftByRun(run.runId);
+      response.status(HTTP_STATUS.ok).json({ run, draft });
+    } catch (error: unknown) {
+      next(error);
     }
-    const run = await repository.getRun(runId);
-    if (!run) {
-      next(createApplicationError({
-        code: ERROR_CODES.routeNotFound,
-        message: ERROR_MESSAGES.routeNotFound,
-        status: HTTP_STATUS.notFound,
-        details: { path: `story-agent/runs/${runId}` }
-      }));
-      return;
-    }
-    const draft = await repository.getDraftByRun(run.runId);
-    response.status(HTTP_STATUS.ok).json({ run, draft });
-  } catch (error: unknown) {
-    next(error);
   }
-}
 });

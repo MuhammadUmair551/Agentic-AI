@@ -40,7 +40,7 @@ The evaluator exits `0` only when every fixture passes, `1` when one or more qua
 
 Repair remains bounded: at most two repairs, the prior output is limited to 12,000 characters, and at most ten validation errors of 500 characters each are supplied. The pipeline enforces six model calls, 12,000 reported total tokens, and 60 seconds; providers that omit usage cannot support exact token enforcement.
 
-The widget is the bottom-right sparkle button; Ctrl+J focuses it. Enter sends, Shift+Enter adds a newline. History lists saved runs; queued runs poll every 10 seconds.
+The widget is the bottom-right Gecko launcher; Ctrl+J opens and focuses it. Enter sends, Shift+Enter adds a newline, and Escape closes the panel. History lists saved runs; queued runs poll every 10 seconds. The forest-dark interface uses reusable `@workspace/ui` primitives and the `GeckoMascot` export. Nonessential mascot and interface motion is reduced for users who request reduced motion.
 
 ## API
 

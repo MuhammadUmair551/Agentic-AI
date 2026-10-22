@@ -274,6 +274,18 @@ for (const eCommerceCase of eCommerceCases) {
 }
 
 
+void test("generate prompt encourages multiple thin stories for cart and checkout journeys", async () => {
+  const { build: buildGeneratePrompt } = await import("../story-agent.generate.prompt.js");
+  const prompt = buildGeneratePrompt({
+    requirement: "Create a cart and checkout flow with adding products, updating quantities, totals, and payment review.",
+    clarifications: { questions: [], assumptions: [] },
+    existingTitles: []
+  });
+
+  assert.match(prompt, /multiple independent.*story|multi-step flows|cart.*checkout/i);
+  assert.match(prompt, /one actor and one outcome/i);
+});
+
 void test("generation and repair prompts specify every required Story field", async () => {
   const { build: buildGeneratePrompt } = await import("../story-agent.generate.prompt.js");
   const { build: buildRepairPrompt } = await import("../story-agent.repair.prompt.js");

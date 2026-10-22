@@ -6,6 +6,42 @@ import type {
   StoryAgentStory
 } from "./story-agent.types";
 
+export const filterStoryAgentRuns = (runs: StoryAgentRun[], query: string): StoryAgentRun[] => {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) return runs;
+
+  return runs.filter((run) => {
+    const searchable = [run.requirement, ...(run.stories ?? []).map((story) => story.title), ...(run.stories ?? []).map((story) => story.epic), ...(run.questions ?? [])].join(" ").toLowerCase();
+    return searchable.includes(normalizedQuery);
+  });
+};
+
+export const buildStoryAgentRunCopyText = (run: StoryAgentRun): string => {
+  const sections: string[] = [];
+  sections.push(`Requirement: ${run.requirement || "Untitled requirement"}`);
+  if (run.status) sections.push(`Status: ${run.status}`);
+  if (run.error) sections.push(`Error: ${run.error}`);
+  if (run.reason) sections.push(`Reason: ${run.reason}`);
+  const stories = run.stories ?? [];
+  if (stories.length === 0) return sections.join("\n");
+
+  sections.push("\nStories:");
+  for (const story of stories) {
+    sections.push(`\n- ${story.title} (${story.size})`);
+    sections.push(`  Intent: ${story.intent}`);
+    sections.push(`  Epic: ${story.epic}`);
+    if (story.acceptanceCriteria.length > 0) {
+      sections.push("  Acceptance criteria:");
+      for (const criterion of story.acceptanceCriteria) sections.push(`    • ${criterion}`);
+    }
+    if (story.states.length > 0) sections.push(`  States: ${story.states.join(", ")}`);
+    if (story.dependsOn.length > 0) sections.push(`  Depends on: ${story.dependsOn.join(", ")}`);
+    if (story.openQuestions.length > 0) sections.push(`  Open questions: ${story.openQuestions.join(", ")}`);
+    if (story.sliceRationale) sections.push(`  Slice rationale: ${story.sliceRationale}`);
+  }
+  return sections.join("\n");
+};
+
 type Fetch = typeof fetch;
 
 type CreateRunInput = {

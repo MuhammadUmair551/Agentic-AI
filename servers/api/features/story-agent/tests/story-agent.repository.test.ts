@@ -80,3 +80,27 @@ void test("saves and retrieves drafts by run id", async () => {
 
   assert.deepEqual(await repository.getDraftByRun("run-1"), draft);
 });
+
+void test("persists run metadata needed to restore history state", async () => {
+  const persistence = createMemoryPersistence();
+  const repository = createStoryAgentRepository(persistence.db);
+  const document: StoryAgentRunDocument = {
+    runId: "run-2",
+    status: "questions",
+    requirement: "Create checkout stories",
+    questions: ["Who is the actor?"],
+    usage,
+    providers: ["gemini"],
+    attempts: 1,
+    stages: [],
+    validationErrors: [],
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z"
+  };
+
+  await repository.saveRun(document);
+
+  const saved = await repository.getRun("run-2");
+  assert.deepEqual(saved?.questions, ["Who is the actor?"]);
+  assert.equal(saved.requirement, "Create checkout stories");
+});

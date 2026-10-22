@@ -15,6 +15,8 @@ const isExpired = (run: StoryAgentRunDocument, now: string): boolean =>
   (run.queueAttempts ?? 0) >= maximumQueueAttempts || (run.expiresAt !== undefined && run.expiresAt < now);
 
 const resultFields = (result: StoryAgentPipelineResult, now: string): Partial<StoryAgentRunDocument> => ({
+  ...(result.questions ? { questions: [...result.questions] } : {}),
+  ...(result.stories ? { stories: [...result.stories] } : {}),
   usage: result.usage,
   providers: [...result.providers],
   attempts: result.attempts,

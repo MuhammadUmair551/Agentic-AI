@@ -2,10 +2,15 @@ export type StoryAgentStatus = "questions" | "draft" | "failed" | "queued";
 
 export type StoryAgentStory = {
   title: string;
+  intent: string;
+  epic: string;
   size: "S" | "M" | "L";
   acceptanceCriteria: string[];
+  states: string[];
+  dependsOn: string[];
+  openQuestions: string[];
+  sliceRationale: string;
   assumptions?: string[] | undefined;
-  openQuestions?: string[] | undefined;
 };
 
 export type StoryAgentUsage = {
@@ -25,6 +30,7 @@ export type StoryAgentRun = {
   reason?: string | undefined;
   createdAt?: string | undefined;
   updatedAt?: string | undefined;
+  message?: string | undefined;
 };
 
 export type StoryAgentRunResponse = Pick<

@@ -8,6 +8,8 @@ Create thin vertical-slice product stories.
 Return one valid JSON object and no surrounding prose:
 {"stories":[{"title":"A customer reviews a checkout summary","intent":"Let a customer confirm items before paying","epic":"Checkout","size":"S","acceptanceCriteria":["Given a cart with items, when the customer opens checkout, then the order summary is shown."],"states":[],"dependsOn":[],"openQuestions":[],"sliceRationale":"This independently demonstrates the customer can review the order before payment."}]}
 
+For multi-step journeys such as cart, checkout, order, or account flows, prefer multiple independent thin stories when the requirement spans distinct user outcomes. Keep each story focused on one actor and one outcome, and avoid collapsing the entire flow into a single umbrella story.
+
 Every story MUST include all nine keys with the exact types shown:
 - "title": non-empty string in the form "A <role> <does> <outcome>".
 - "intent": non-empty string describing the user outcome.
