@@ -33,7 +33,7 @@ Web widget -> POST /story-agent/runs -> service pipeline -> provider router -> L
 
 ## Web experience and reusable UI boundary
 
-The web client uses a forest-dark, Gecko-led visual identity. `packages/ui` remains the generic presentation boundary: its controlled public exports provide shadcn primitives plus `GeckoMascot`, a lightweight SVG with CSS-only idle, thinking, success, and error presentation states. The mascot honors `prefers-reduced-motion` and has no JavaScript animation loop.
+The web client uses a forest-dark, Gecko-led visual identity. `packages/ui` remains the generic presentation boundary: its controlled public exports provide shadcn primitives plus one canonical `GeckoMascot` SVG. It supports CSS-only idle, thinking, speaking, and happy states (with compatible success/error variants), glossy eye motion, and reduced-motion behavior without a JavaScript animation loop.
 
 Story Agent compositions stay feature-owned in `apps/web/features/story-agent/components/`: `story-agent-widget.tsx` owns the accessible floating launcher and feature state; `story-agent-panel.tsx` owns the dialog/tabs; `story-agent-chat.tsx` composes workshop states; `story-agent-composer.tsx` owns the sticky brief input; `story-agent-empty-state.tsx` owns guided starter briefs; `story-agent-run-state.tsx` selects loading/questions/queued/failed/draft states; `story-agent-draft-collection.tsx` and `story-agent-criteria.tsx` render the story dossiers and structured criteria; `story-agent-history.tsx` owns archive search and saved-run selection. They consume package exports rather than package internals. API calls, polling, state, and domain formatting are deliberately not moved into `packages/ui`.
 

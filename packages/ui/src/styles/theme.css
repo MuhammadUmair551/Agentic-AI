@@ -69,7 +69,6 @@
   --sidebar-accent-foreground: #f4f3e8;
   --sidebar-border: #304635;
   --sidebar-ring: #b8e47a;
-  --gecko-mark: #e1f3bf;
 }
 
 * { box-sizing: border-box; }
@@ -88,25 +87,34 @@ body {
 
 button, input, textarea { font-family: Arial, Helvetica, sans-serif; }
 
-@keyframes gecko-breathe { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-1.5px) rotate(-1deg); } }
-@keyframes gecko-blink { 0%, 45%, 48%, 100% { transform: scaleY(1); } 46%, 47% { transform: scaleY(.08); } }
-@keyframes gecko-tail { 0%, 100% { transform: rotate(-1deg); } 50% { transform: rotate(3deg); } }
-@keyframes gecko-think { 0%, 100% { transform: rotate(-2deg); } 50% { transform: rotate(3deg); } }
-@keyframes gecko-success { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
-@keyframes gecko-launcher-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(184, 228, 122, .28); } 55% { box-shadow: 0 0 0 7px rgba(184, 228, 122, 0); } }
+@keyframes gecko-breathe { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-2px) rotate(-1deg); } }
+@keyframes gecko-blink { 0%, 42%, 46%, 100% { transform: scaleY(1); } 44% { transform: scaleY(.06); } }
+@keyframes gecko-tail { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(5deg); } }
+@keyframes gecko-think { 0%, 100% { transform: rotate(-2deg) translateY(0); } 50% { transform: rotate(3deg) translateY(-2px); } }
+@keyframes gecko-happy { 0%, 100% { transform: translateY(0) rotate(0deg); } 30% { transform: translateY(-7px) rotate(-4deg); } 60% { transform: translateY(-2px) rotate(3deg); } }
+@keyframes gecko-bubble { 0%, 100% { opacity: .1; transform: translateY(2px) scale(.9); } 50% { opacity: .9; transform: translateY(-4px) scale(1); } }
 
-.gecko-mascot__body { transform-origin: center; animation: gecko-breathe 3.6s ease-in-out infinite; }
-.gecko-mascot__eyes { transform-origin: 50% 42%; animation: gecko-blink 5s ease-in-out infinite; }
-.gecko-mascot__tail { transform-origin: 62% 75%; animation: gecko-tail 3.6s ease-in-out infinite; }
-.gecko-mascot--thinking .gecko-mascot__body { animation: gecko-think 1.3s ease-in-out infinite; }
-.gecko-mascot--success .gecko-mascot__body { animation: gecko-success .8s ease-in-out 2; }
-.gecko-mascot--error .gecko-mascot__body { animation: gecko-think .35s ease-in-out 2 reverse; }
-.gecko-launcher { animation: gecko-launcher-pulse 3.4s ease-out infinite; }
-.gecko-launcher:hover .gecko-mascot__body, .gecko-launcher:focus-visible .gecko-mascot__body { animation: gecko-success .72s ease-in-out 1; }
+.gecko-mascot { overflow: visible; }
+.gecko-mascot__body { transform-origin: 96px 70px; animation: gecko-breathe 3.8s ease-in-out infinite; }
+.gecko-mascot__eyes { transform-origin: 124px 45px; animation: gecko-blink 5.8s ease-in-out infinite; }
+.gecko-mascot__tail { transform-origin: 51px 71px; animation: gecko-tail 3.8s ease-in-out infinite; }
+.gecko-mascot__pupil { transform: translate(var(--gecko-look-x, 0px), var(--gecko-look-y, 0px)); transition: transform 180ms ease-out; }
+.gecko-mascot__thought, .gecko-mascot__speech { display: none; }
+.gecko-mascot--thinking .gecko-mascot__body { animation: gecko-think 1.35s ease-in-out infinite; }
+.gecko-mascot--thinking .gecko-mascot__thought { display: block; animation: gecko-bubble 1.45s ease-in-out infinite; transform-origin: center; }
+.gecko-mascot--speaking .gecko-mascot__mouth { animation: gecko-blink .48s ease-in-out infinite; transform-origin: 67px 72px; }
+.gecko-mascot--speaking .gecko-mascot__speech { display: block; animation: gecko-bubble .8s ease-in-out infinite; }
+.gecko-mascot--happy .gecko-mascot__body, .gecko-mascot--success .gecko-mascot__body { animation: gecko-happy .78s cubic-bezier(.2,.8,.2,1) 1; }
+.gecko-mascot--error .gecko-mascot__body { animation: gecko-think .36s ease-in-out 2 reverse; }
+.gecko-launcher { isolation: isolate; background: linear-gradient(145deg, rgba(18,51,52,.96), rgba(8,29,31,.98)); box-shadow: 0 14px 28px rgba(1,13,24,.48), inset 0 1px 0 rgba(213,255,247,.2); }
+.gecko-launcher::after { content: ""; position: absolute; top: 7px; left: 13px; width: 28px; height: 10px; border-radius: 999px; background: rgba(225,255,249,.18); filter: blur(2px); transform: rotate(-24deg); pointer-events: none; }
+.gecko-launcher__bubble { position: absolute; z-index: -1; border-radius: 999px; background: rgba(132,255,222,.6); pointer-events: none; animation: gecko-bubble 2.7s ease-in-out infinite; }
+.gecko-launcher__bubble--one { right: -2px; top: 7px; width: 5px; height: 5px; }
+.gecko-launcher__bubble--two { right: 7px; top: -5px; width: 3px; height: 3px; animation-delay: .7s; }
 .gecko-launcher:hover .gecko-mascot__tail, .gecko-launcher:focus-visible .gecko-mascot__tail { animation-duration: .85s; }
 
 @media (prefers-reduced-motion: reduce) {
-  .gecko-mascot__body, .gecko-mascot__eyes, .gecko-mascot__tail, .gecko-launcher { animation: none; }
+  .gecko-mascot__body, .gecko-mascot__eyes, .gecko-mascot__tail, .gecko-mascot__thought, .gecko-mascot__speech { animation: none; }
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
 }
 

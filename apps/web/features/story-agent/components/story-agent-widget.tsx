@@ -1,7 +1,7 @@
 "use client";
 
 import { MessageCirclePlus } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { Button, GeckoMascot } from "@workspace/ui";
 import { buildStoryAgentRunCopyText, createStoryAgentClient, filterStoryAgentRuns } from "../story-agent.client";
 import type { StoryAgentRun, StoryAgentStory } from "../story-agent.types";
@@ -12,6 +12,7 @@ type StoryAgentWidgetProps = { apiBaseUrl: string };
 export const StoryAgentWidget = ({ apiBaseUrl }: StoryAgentWidgetProps): React.JSX.Element => {
   const client = useMemo(() => createStoryAgentClient(apiBaseUrl), [apiBaseUrl]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const happyTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const requestSequenceRef = useRef(0);
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState("");
@@ -20,6 +21,7 @@ export const StoryAgentWidget = ({ apiBaseUrl }: StoryAgentWidgetProps): React.J
   const [historySearch, setHistorySearch] = useState("");
   const [run, setRun] = useState<StoryAgentRun | null>(null);
   const [history, setHistory] = useState<StoryAgentRun[]>([]);
+  const [isHappy, setIsHappy] = useState(false);
 
   const loadHistory = useCallback(async (): Promise<void> => {
     setIsHistoryLoading(true);
@@ -55,6 +57,10 @@ export const StoryAgentWidget = ({ apiBaseUrl }: StoryAgentWidgetProps): React.J
     window.addEventListener("keydown", focusInput);
     return () => window.removeEventListener("keydown", focusInput);
   }, [openPanel]);
+
+  useEffect(() => () => {
+    if (happyTimerRef.current) clearTimeout(happyTimerRef.current);
+  }, []);
 
   useEffect(() => {
     if (run?.status !== "queued" || run.runId.length === 0) { return; }
@@ -133,6 +139,30 @@ export const StoryAgentWidget = ({ apiBaseUrl }: StoryAgentWidgetProps): React.J
     await copyText(text);
   }, [copyText]);
 
+  const handleMascotClick = useCallback((): void => {
+    if (happyTimerRef.current) clearTimeout(happyTimerRef.current);
+    setIsHappy(true);
+    happyTimerRef.current = setTimeout(() => { setIsHappy(false); }, 850);
+    openPanel();
+  }, [openPanel]);
+
+  const trackPointer = useCallback((event: PointerEvent<HTMLButtonElement>): void => {
+    if (event.pointerType !== "mouse" && event.pointerType !== "pen") return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const x = Math.max(-1.7, Math.min(1.7, (event.clientX - bounds.left - bounds.width / 2) / bounds.width * 4));
+    const y = Math.max(-1.4, Math.min(1.4, (event.clientY - bounds.top - bounds.height / 2) / bounds.height * 3));
+    event.currentTarget.style.setProperty("--gecko-look-x", `${String(x)}px`);
+    event.currentTarget.style.setProperty("--gecko-look-y", `${String(y)}px`);
+  }, []);
+
+  const resetPointer = useCallback((event: PointerEvent<HTMLButtonElement>): void => {
+    event.currentTarget.style.setProperty("--gecko-look-x", "0px");
+    event.currentTarget.style.setProperty("--gecko-look-y", "0px");
+  }, []);
+
+  const mascotState = isLoading ? "thinking" : isHappy ? "happy" : "idle";
+  const statusText = isLoading ? "Shaping your stories" : run?.status === "queued" ? "Your request is queued" : run?.status === "failed" ? "Your last request needs another try" : isOpen ? "Story workshop open" : "Open Story Workshop";
+
   return <>
     <Button
       type="button"
@@ -140,12 +170,15 @@ export const StoryAgentWidget = ({ apiBaseUrl }: StoryAgentWidgetProps): React.J
       aria-label="Open Story Agent"
       aria-expanded={isOpen}
       aria-controls="story-agent-panel"
-      className="gecko-launcher group fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-5 z-40 size-16 rounded-full border-2 border-[#b8e47a]/80 bg-[#173a22] p-1 text-[#b8e47a] shadow-[0_14px_36px_rgba(3,19,10,.62)] transition duration-200 hover:-translate-y-1 hover:scale-105 hover:border-[#d9f8a6] hover:bg-[#214c2c] focus-visible:ring-4 focus-visible:ring-[#c9ef8a]/35 sm:bottom-6 sm:right-6"
-      onClick={openPanel}
+      className="gecko-launcher group fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-5 z-40 size-[4.4rem] rounded-full border border-cyan-200/35 p-1 text-[#b8e47a] transition duration-200 hover:-translate-y-1 hover:scale-105 focus-visible:ring-4 focus-visible:ring-cyan-200/35 sm:bottom-6 sm:right-6"
+      onClick={handleMascotClick}
+      onPointerMove={trackPointer}
+      onPointerLeave={resetPointer}
     >
-      <GeckoMascot className="size-12 drop-shadow-[0_2px_5px_rgba(0,0,0,.35)]" />
-      <span className="absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full border border-[#183d22] bg-[#c9ef8a] text-[#102116]"><MessageCirclePlus aria-hidden="true" className="size-3" /></span>
-      <span className="pointer-events-none absolute right-full mr-3 hidden w-max rounded-sm border border-[#466247] bg-[#102116] px-3 py-2 font-mono text-[11px] text-[#e8f2df] opacity-0 shadow-xl transition group-hover:-translate-x-1 group-hover:opacity-100 sm:block">Open Story Workshop <span className="ml-2 text-[#b8e47a]">Ctrl+J</span></span>
+      <GeckoMascot state={mascotState} className="h-[3.8rem] w-[4.35rem] max-w-none -translate-x-0.5 drop-shadow-[0_3px_4px_rgba(0,0,0,.24)]" />
+      <span aria-hidden="true" className="gecko-launcher__bubble gecko-launcher__bubble--one" /><span aria-hidden="true" className="gecko-launcher__bubble gecko-launcher__bubble--two" />
+      <span className="absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full border border-cyan-100/50 bg-[#baf9d3] text-[#083544]"><MessageCirclePlus aria-hidden="true" className="size-3" /></span>
+      <span className="pointer-events-none absolute bottom-full right-0 mb-3 hidden max-w-56 rounded-xl border border-cyan-100/20 bg-[#0b1d29]/90 px-3 py-2 text-left font-mono text-[11px] leading-4 text-[#e8fffa] opacity-0 shadow-xl backdrop-blur-md transition group-hover:-translate-y-1 group-hover:opacity-100 group-focus-visible:-translate-y-1 group-focus-visible:opacity-100 sm:block">{statusText}<span className="ml-2 text-[#a8ffe0]">Ctrl+J</span></span>
     </Button>
     <StoryAgentPanel isOpen={isOpen} input={input} isLoading={isLoading} run={run} history={filteredHistory} historySearch={historySearch} isHistoryLoading={isHistoryLoading} inputRef={inputRef} onClose={() => setIsOpen(false)} onInputChange={setInput} onNewChat={resetActiveConversation} onHistorySearchChange={setHistorySearch} onSend={() => { void send(); }} onSuggestion={(suggestion) => { setInput(suggestion); inputRef.current?.focus(); }} onSelectHistory={(runId) => { void selectHistory(runId); }} onCopyRun={copyRun} onCopyStory={copyStory} />
   </>;

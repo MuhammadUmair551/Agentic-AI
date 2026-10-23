@@ -21,3 +21,12 @@ void test("GeckoMascot exposes presentation state without an accessibility dupli
   assert.match(markup, /aria-hidden="true"/);
   assert.match(markup, /gecko-mascot--thinking/);
 });
+
+void test("GeckoMascot supports the shared interaction-state variants", (): void => {
+  const happy = renderToStaticMarkup(<GeckoMascot state="happy" />);
+  const speaking = renderToStaticMarkup(<GeckoMascot state="speaking" />);
+
+  assert.match(happy, /gecko-mascot--happy/);
+  assert.match(speaking, /gecko-mascot--speaking/);
+  assert.match(happy, /gecko-mascot__toes/);
+});
