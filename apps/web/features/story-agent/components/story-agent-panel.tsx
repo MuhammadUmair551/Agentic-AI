@@ -42,7 +42,7 @@ export const StoryAgentPanel = (props: StoryAgentPanelProps): React.JSX.Element 
   return (
     <>
       <button type="button" aria-label="Close Story Agent" onClick={props.onClose} className={`fixed inset-0 z-40 bg-[#061008]/70 backdrop-blur-[2px] transition-opacity ${props.isOpen ? "opacity-100" : "pointer-events-none opacity-0"}`} />
-      <aside id="story-agent-panel" role="dialog" aria-modal="true" aria-labelledby="story-agent-title" className={`fixed inset-y-0 right-0 z-50 flex w-full max-w-[760px] flex-col border-l border-[#38513b] bg-[#0e1c12] shadow-2xl transition-transform duration-300 ease-out ${props.isOpen ? "translate-x-0" : "translate-x-full"}`}>
+      <aside id="story-agent-panel" role="dialog" aria-modal="true" aria-labelledby="story-agent-title" className={`fixed inset-y-0 right-0 z-50 flex w-full max-w-190 flex-col border-l border-[#38513b] bg-[#0e1c12] shadow-2xl transition-transform duration-300 ease-out ${props.isOpen ? "translate-x-0" : "translate-x-full"}`}>
         <header className="relative overflow-hidden border-b border-[#4b674a] bg-[#173b24] px-5 py-5 text-[#f4f3e8]">
           <Leaf aria-hidden="true" className="absolute -right-4 -top-4 size-28 rotate-12 text-[#83ac62]/15" />
           <div className="flex items-center justify-between gap-3 pr-12">
