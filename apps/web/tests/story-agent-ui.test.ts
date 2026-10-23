@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildStoryAgentRunCopyText, filterStoryAgentRuns } from "../features/story-agent/story-agent.client";
+import { buildStoryAgentRunCopyText, filterStoryAgentRuns, parseStoryAgentRun } from "../features/story-agent/story-agent.client";
 import type { StoryAgentRun } from "../features/story-agent/story-agent.types";
 
 const run: StoryAgentRun = {
@@ -61,4 +61,11 @@ test("copy text includes every story and acceptance criterion", () => {
     assert.match(output, /A customer updates quantity in the cart/);
     assert.match(output, /Given a cart item exists/);
     assert.match(output, /then the cart rejects the update/);
+});
+
+test("turns malformed persisted drafts into a controlled failed state", () => {
+  const parsed = parseStoryAgentRun({ runId: "bad-run", status: "draft", requirement: "Create stories", stories: [{ title: "Missing required story fields" }] });
+
+  assert.equal(parsed.status, "failed");
+  assert.equal(parsed.error, "Saved draft data is incomplete.");
 });

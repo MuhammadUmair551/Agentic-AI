@@ -3,7 +3,8 @@ import type {
   StoryAgentRunDetail,
   StoryAgentRunResponse,
   StoryAgentStatus,
-  StoryAgentStory
+  StoryAgentStory,
+  StoryAgentUsage
 } from "./story-agent.types";
 
 export const filterStoryAgentRuns = (runs: StoryAgentRun[], query: string): StoryAgentRun[] => {
@@ -62,20 +63,48 @@ const asStatus = (value: unknown): StoryAgentStatus => {
 const asStrings = (value: unknown): string[] | undefined =>
   Array.isArray(value) && value.every((item) => typeof item === "string") ? value : undefined;
 
-const asStories = (value: unknown): StoryAgentStory[] | undefined =>
-  Array.isArray(value) ? value as StoryAgentStory[] : undefined;
-
-const toRun = (value: unknown): StoryAgentRun => {
+const asUsage = (value: unknown): StoryAgentUsage | undefined => {
   const record = asRecord(value);
+  const inputTokens = typeof record.inputTokens === "number" ? record.inputTokens : undefined;
+  const outputTokens = typeof record.outputTokens === "number" ? record.outputTokens : undefined;
+  const totalTokens = typeof record.totalTokens === "number" ? record.totalTokens : undefined;
+  if (inputTokens === undefined && outputTokens === undefined && totalTokens === undefined) return undefined;
+  return { ...(inputTokens === undefined ? {} : { inputTokens }), ...(outputTokens === undefined ? {} : { outputTokens }), ...(totalTokens === undefined ? {} : { totalTokens }) };
+};
+
+const asStory = (value: unknown): StoryAgentStory | undefined => {
+  const record = asRecord(value);
+  const size = record.size;
+  const acceptanceCriteria = asStrings(record.acceptanceCriteria);
+  const states = asStrings(record.states);
+  const dependsOn = asStrings(record.dependsOn);
+  const openQuestions = asStrings(record.openQuestions);
+  if (typeof record.title !== "string" || typeof record.intent !== "string" || typeof record.epic !== "string" || (size !== "S" && size !== "M" && size !== "L") || acceptanceCriteria === undefined || states === undefined || dependsOn === undefined || openQuestions === undefined || typeof record.sliceRationale !== "string") return undefined;
+  const assumptions = asStrings(record.assumptions);
+  return { title: record.title, intent: record.intent, epic: record.epic, size, acceptanceCriteria, states, dependsOn, openQuestions, sliceRationale: record.sliceRationale, ...(assumptions === undefined ? {} : { assumptions }) };
+};
+
+const asStories = (value: unknown): StoryAgentStory[] | undefined => {
+  if (!Array.isArray(value)) return undefined;
+  const stories = value.map(asStory);
+  if (!stories.every((story): story is StoryAgentStory => story !== undefined)) return undefined;
+  return stories;
+};
+
+export const parseStoryAgentRun = (value: unknown): StoryAgentRun => {
+  const record = asRecord(value);
+  const status = asStatus(record.status);
+  const stories = asStories(record.stories);
+  const invalidDraft = status === "draft" && stories === undefined;
 
   return {
     runId: typeof record.runId === "string" ? record.runId : "",
-    status: asStatus(record.status),
+    status: invalidDraft ? "failed" : status,
     requirement: typeof record.requirement === "string" ? record.requirement : "",
     questions: asStrings(record.questions),
-    stories: asStories(record.stories),
-    usage: asRecord(record.usage),
-    error: typeof record.error === "string" ? record.error : undefined,
+    stories,
+    usage: asUsage(record.usage),
+    error: invalidDraft ? "Saved draft data is incomplete." : typeof record.error === "string" ? record.error : undefined,
     reason: typeof record.reason === "string" ? record.reason : undefined,
     createdAt: typeof record.createdAt === "string" ? record.createdAt : undefined,
     updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : undefined
@@ -115,28 +144,29 @@ export const createStoryAgentClient = (baseUrl: string, fetcher: Fetch = fetch) 
         body: JSON.stringify(input)
       }));
 
+      const run = parseStoryAgentRun(payload);
       return {
-        runId: typeof payload.runId === "string" ? payload.runId : "",
-        status: asStatus(payload.status),
-        questions: asStrings(payload.questions),
-        stories: asStories(payload.stories),
-        usage: asRecord(payload.usage),
-        error: typeof payload.error === "string" ? payload.error : undefined,
-        reason: typeof payload.reason === "string" ? payload.reason : undefined,
+        runId: run.runId,
+        status: run.status,
+        questions: run.questions,
+        stories: run.stories,
+        usage: run.usage,
+        error: run.error,
+        reason: run.reason,
         message: typeof payload.message === "string" ? payload.message : undefined
       };
     },
     listRuns: async (): Promise<StoryAgentRun[]> => {
       const payload = asRecord(await request(fetcher, `${endpoint}?limit=20&skip=0`));
       const runs = Array.isArray(payload.runs) ? payload.runs : [];
-      return runs.map(toRun);
+      return runs.map(parseStoryAgentRun);
     },
     getRun: async (runId: string): Promise<StoryAgentRunDetail> => {
       const payload = asRecord(await request(fetcher, `${endpoint}/${encodeURIComponent(runId)}`));
       const draft = asRecord(payload.draft);
 
       return {
-        run: toRun(payload.run),
+        run: parseStoryAgentRun(payload.run),
         draft: payload.draft === null ? null : { stories: asStories(draft.stories) ?? [] }
       };
     }

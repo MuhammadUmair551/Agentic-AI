@@ -6,7 +6,7 @@ import { createLogger } from "@workspace/logging";
 import { createApp, createServer, createShutdown } from "./bootstrap/index.js";
 import { createApiConfig, readApiEnvironment } from "./config/index.js";
 import { apiRuntime } from "./constants/index.js";
-import { createMongoDbIntegration } from "./integrations/index.js";
+import { createLlmGateway, createMongoDbIntegration } from "./integrations/index.js";
 import { createStoryAgentFeature } from "./features/story-agent/index.js";
 
 const config = createApiConfig(readApiEnvironment());
@@ -19,9 +19,10 @@ const database = createMongoDbIntegration({
   logger,
   ...(config.mongodbUri ? { uri: config.mongodbUri } : {})
 });
+const llm = createLlmGateway({ fetch: globalThis.fetch });
 await database.connect();
 const storyAgent = config.mongodbUri
-  ? createStoryAgentFeature({ db: database, logger, clock: { now: Date.now }, queueIntervalMs: config.queueIntervalMs })
+  ? createStoryAgentFeature({ db: database, llm, logger, clock: { now: Date.now }, queueIntervalMs: config.queueIntervalMs })
   : undefined;
 if (storyAgent) await storyAgent.ensureIndexes();
 const app = createApp({ config, logger, persistence: database, ...(storyAgent ? { storyAgentRouteDependencies: storyAgent.routeDependencies } : {}) });

@@ -179,7 +179,9 @@
   },
   "integrations": {
     "serverDirectory": "integrations",
-    "externalImplementationPackages": ["mongoose", "redis", "stripe"]
+    "externalImplementationPackages": ["mongoose", "redis", "stripe", "openai", "groq-sdk", "@google/generative-ai", "ollama"],
+    "externalTransportCallIdentifiers": ["fetch"],
+    "externalTransportForbiddenRoots": ["features/story-agent"]
   },
   "packageManagement": {
     "manager": "pnpm",
@@ -227,7 +229,7 @@
   "moduleBoundaries": [
     { "project": "web", "root": "features/workspace-foundation", "categories": ["components"], "rootExports": ["components"] },
     { "project": "web", "root": "types", "categories": ["configuration", "routing"], "rootExports": ["configuration", "routing"] },
-    { "project": "api", "root": "integrations", "categories": ["mongodb"], "rootExports": ["mongodb"] },
+    { "project": "api", "root": "integrations", "categories": ["mongodb", "llm"], "rootExports": ["mongodb", "llm"] },
     { "project": "api", "root": "constants", "categories": ["errors", "http", "runtime"], "rootExports": ["errors", "http", "runtime"] },
     { "project": "api", "root": "types", "categories": ["configuration"], "rootExports": ["configuration"] },
     { "project": "api", "root": "features/health", "categories": ["controllers", "routes", "services"], "rootExports": ["routes"] },

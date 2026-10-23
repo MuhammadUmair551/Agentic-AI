@@ -1,4 +1,4 @@
-# Story Agent architecture — v0.4 final
+# Story Agent architecture — v0.5 final
 
 Status: implemented, reliability-fixed, and verified against repository files on 2026-10-21.
 
@@ -9,22 +9,23 @@ Repository rules in `AGENTS.md`, `CLAUDE.md`, `architecture.yaml`, and `.agent/`
 Story Agent is a feature-owned Express API plus an app-wide floating Next.js chat widget. It produces `questions`, `draft`, `failed`, or `queued`.
 
 ```text
-Web widget -> POST /story-agent/runs -> service pipeline -> provider router -> OpenAI-compatible provider
-                         |                    |                    |
-                         v                    v                    -> failover/circuit state (router closure)
+Web widget -> POST /story-agent/runs -> service pipeline -> provider router -> LLM gateway -> provider
+                         |                    |                    |                  |
+                         v                    v                    -> failover/circuit state  -> HTTP/auth/timeout
                     MongoDB runs/drafts <- queue worker retries queued work
 ```
 
-The server composition factory is `servers/api/features/story-agent/index.ts`. `servers/api/server.ts` creates it only with `MONGODB_URI`, ensures indexes, registers route dependencies through `createApp`, and starts/stops the queue worker.
+`servers/api/server.ts` is the only runtime composition point for external clients: it creates the MongoDB integration and the OpenAI-compatible LLM gateway, then injects their contracts into `servers/api/features/story-agent/index.ts`. The feature creates its repository/router/service/queue from those contracts, ensures indexes, registers route dependencies through `createApp`, and starts/stops the queue worker.
 
 ## Actual files
 
 | Area | Files | Responsibility |
 |---|---|---|
-| Composition | `index.ts` | Wires repository, provider router/client, pipeline, queue, and route dependencies. |
+| Server integrations | `servers/api/integrations/mongodb/**`, `servers/api/integrations/llm/**` | Mongo driver lifecycle/persistence contract and OpenAI-compatible HTTP transport/gateway contract. |
+| Composition | `index.ts` | Wires repository, provider router, pipeline, queue, and route dependencies from injected Mongo/LLM contracts. |
 | HTTP | `routes/index.ts`, `routes/story-agent.route.ts`, `story-agent.controller.ts` | Express endpoints, request validation, response mapping. |
 | Pipeline | `story-agent.service.ts` | Intake, context selection, clarify, generate, validate, repair, usage/provider/stage ledger. |
-| Provider | `story-agent.integration.ts`, `story-agent.router.ts`, `story-agent.config.ts` | OpenAI-compatible completions, typed failures, profiles, failover, circuit breaker. |
+| Provider policy | `story-agent.router.ts`, `story-agent.config.ts` | Profiles, provider selection, failover, typed transport-error handling, circuit breaker. |
 | Validation/prompts | `story-agent.validation.ts`, `story-agent.json.ts`, `story-agent.{clarify,generate,repair}.prompt.ts` | Zod, fenced JSON extraction, prompts; clarify prompt is version 2. |
 | Persistence/queue | `story-agent.repository.ts`, `story-agent.queue.ts` | Mongo collection/index access, atomic queue claim, retry worker. |
 | Evaluation/tests | `story-agent.eval.ts`, `tests/story-agent.*.test.ts` | Five live fixtures and fake-boundary tests. |
@@ -64,9 +65,17 @@ Shared contracts: `packages/types/src/api/story-agent/story-agent.ts`. A story h
 
 `QUEUE_INTERVAL_MS` defaults to 120000 ms. The worker atomically claims one eligible run, locks it five minutes, increments `queueAttempts`, and processes one at a time. Draft/questions persist final results; provider unavailability reschedules; other failures fail; five queue attempts or expiry fail with `expired`.
 
-## Providers, budgets, and failure behavior
+## Integration boundaries, providers, budgets, and failure behavior
 
-The integration posts to `${baseUrl}/chat/completions`. 429/5xx/transport/timeout are retryable; 401/403 are auth; remaining HTTP failures are bad request. Named providers are `gemini`, `groq`, `ollama`; legacy, fallback, and Ollama aliases are also recognized when complete.
+The LLM boundary is server-owned: `servers/api/integrations/llm/openai-compatible.ts` owns OpenAI-compatible URL construction, HTTP request/authorization, timeout/abort, response parsing/usage normalization, and typed transport errors. Its public `LlmGateway` contract is exported only through `servers/api/integrations/llm/index.ts` and `servers/api/integrations/index.ts`.
+
+Story Agent code may depend on `LlmGateway`, `LlmClient`, completion values, and typed transport errors. It must not import provider SDKs, call provider URLs, construct authorization headers, or invoke `fetch` for provider communication. The feature router owns application policy: configured profiles, provider ordering, failover, cooldown state, and circuit-breaker decisions. The service owns prompts, bounded generation/repair, and output validation. This keeps transport failures explicit without moving product policy into infrastructure.
+
+MongoDB follows the same direction: `servers/api/integrations/mongodb/**` alone imports Mongoose and exposes `MongoPersistence`; `story-agent.repository.ts` receives that contract and owns only Story Agent collections and query intent. No Story Agent service/controller/router imports the driver or a raw database client.
+
+The architecture validator enforces these rules. Server code outside `integrations/**` cannot import configured vendor transport packages (`mongoose`, `redis`, `stripe`, `openai`, `groq-sdk`, `@google/generative-ai`, `ollama`). `features/story-agent/**` additionally cannot invoke configured external transport calls (`fetch`); this narrow scope avoids treating legitimate internal HTTP in unrelated runtime code as a provider integration. Tests are exempt for local HTTP boundary verification; approved implementations live under `servers/api/integrations/**`. New external systems must add a server integration, public index, explicit contract, deterministic fake-boundary tests, and the corresponding machine-readable policy entry before feature use.
+
+The LLM gateway posts to `${baseUrl}/chat/completions`. 429/5xx/transport/timeout are retryable; 401/403 are auth; remaining HTTP failures are bad request. Named providers are `gemini`, `groq`, `ollama`; legacy, fallback, and Ollama aliases are also recognized when complete.
 
 Profiles are `fast`, `generate`, `tools`, defaulting to configured providers unless profile variables override them. The router fails over in profile order and opens a circuit after two failures for `LLM_COOLDOWN_MS` (default 60000 ms), then allows one trial. Provider exhaustion becomes `providers_unavailable`, which the pipeline returns as `queued`.
 
@@ -105,7 +114,7 @@ Known documentation limits remain honest: the project uses deterministic offline
 
 ## Evidence, gaps, and V2
 
-Offline tests cover provider integration/router, service draft/questions/concise meaningful intake/repair/permanent validation failure/duplicate-title rejection/token and elapsed-time budgets/provider-unavailable/context/injection/oversized input, repository, queue, validation, and HTTP mapping. They use fakes and are the required repeatable quality gate; they do not measure live-provider quality.
+Offline tests cover the LLM gateway request/auth/timeout/parsing/error contract, provider router failover/cooldown, service draft/questions/concise meaningful intake/repair/permanent validation failure/duplicate-title rejection/token and elapsed-time budgets/provider-unavailable/context/injection/oversized input, repository, queue, validation, and HTTP mapping. Architecture-boundary fixtures also reject direct provider SDK imports and raw transport calls outside server integrations. They use fakes and are the required repeatable quality gate; they do not measure live-provider quality.
 
 Live eval has five fixtures (clear, ambiguous, existing-title, long, injection), is sequential, and pauses eight seconds between fixtures. It reports `passed` when expected behavior and output validation succeed, `quality_failed` when a usable provider response cannot meet the expected contract, and `inconclusive` when provider capacity/configuration prevents a meaningful result (including queued `providers_unavailable` or `no_provider_configured`). It exits 0 for all-pass, 1 for one or more quality failures, and 2 for inconclusive-only runs. A structured refusal passes only when the fixture explicitly expects `failed`/`model_refusal`; the existing injection fixture expects a valid safe planning draft. On 2026-10-17, three Groq evaluations consistently returned a clear requirement as `draft` and ambiguous as `questions`; later fixtures could be `queued` after quota/circuit cooldown. No quota-free live-eval claim is made.
 

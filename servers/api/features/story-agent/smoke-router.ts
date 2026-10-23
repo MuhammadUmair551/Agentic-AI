@@ -2,15 +2,14 @@
 import { config } from 'dotenv';
 config();
 
-import { createStoryAgentProviderClient } from './story-agent.integration.js';
+import { createLlmGateway } from '../../integrations/index.js';
 import { createStoryAgentProviderRouter } from './story-agent.router.js';
 import { loadRouterConfig } from './story-agent.config.js';
 import { createLogger } from '@workspace/logging'; // ya jo bhi tera logger hai
 
 const router = createStoryAgentProviderRouter({
   config: loadRouterConfig(),
-  createClient: (providerConfig) =>
-    createStoryAgentProviderClient({ config: providerConfig, fetch }),
+  createClient: createLlmGateway({ fetch: globalThis.fetch }).createClient,
   logger: createLogger({
     service: 'story-agent-router',
     level: 'info',           // optional

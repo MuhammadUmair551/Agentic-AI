@@ -1,22 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { ProviderConfig } from "../../../types/index.js";
+import type { LlmClient, LlmCompletion, LlmTransportError } from "../../../integrations/index.js";
 import {
   createStoryAgentProviderRouter,
   isStoryAgentRouterError,
   type StoryAgentProviderProfile
 } from "../story-agent.router.js";
-import type {
-  StoryAgentProviderClient,
-  StoryAgentProviderError,
-  StoryAgentProviderResult
-} from "../story-agent.integration.js";
 
 const provider = (name: string): ProviderConfig => ({ name, baseUrl: `https://${name}.example.test/v1`, apiKey: "test-key", model: "test", timeoutMs: 100 });
-const result = (name: string): StoryAgentProviderResult => ({
+const result = (name: string): LlmCompletion => ({
   text: "{}", usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, provider: name, model: "test"
 });
-const providerError = (kind: StoryAgentProviderError["kind"]): StoryAgentProviderError => Object.assign(new Error(kind), { kind });
+const providerError = (kind: LlmTransportError["kind"]): LlmTransportError => Object.assign(new Error(kind), { kind });
 const routes = (names: readonly string[]): Readonly<Record<StoryAgentProviderProfile, readonly string[]>> => ({ fast: names, generate: names, tools: names });
 
 void test("fails over retryable provider failures and skips authentication failures", async () => {
@@ -24,7 +20,7 @@ void test("fails over retryable provider failures and skips authentication failu
   const warnings: string[] = [];
   const router = createStoryAgentProviderRouter({
     config: { providers: [provider("gemini"), provider("groq")], routes: routes(["gemini", "groq"]), cooldownMs: 100 },
-    createClient: (config): StoryAgentProviderClient => ({
+    createClient: (config): LlmClient => ({
       complete: async () => {
         await Promise.resolve();
         calls.push(config.name);
@@ -48,7 +44,7 @@ void test("fails over to the next provider after a retryable failure", async () 
   const calls: string[] = [];
   const router = createStoryAgentProviderRouter({
     config: { providers: [provider("groq"), provider("gemini")], routes: routes(["groq", "gemini"]), cooldownMs: 100 },
-    createClient: (config): StoryAgentProviderClient => ({
+    createClient: (config): LlmClient => ({
       complete: async () => {
         await Promise.resolve();
         calls.push(config.name);
@@ -70,7 +66,7 @@ void test("fails over when a provider rejects a model-specific request", async (
   const calls: string[] = [];
   const router = createStoryAgentProviderRouter({
     config: { providers: [provider("groq"), provider("gemini")], routes: routes(["groq", "gemini"]), cooldownMs: 100 },
-    createClient: (config): StoryAgentProviderClient => ({
+    createClient: (config): LlmClient => ({
       complete: async () => {
         await Promise.resolve();
         calls.push(config.name);
@@ -93,7 +89,7 @@ void test("opens a circuit after two failures, then permits one cooldown trial",
   let calls = 0;
   const router = createStoryAgentProviderRouter({
     config: { providers: [provider("gemini")], routes: routes(["gemini"]), cooldownMs: 100 },
-    createClient: (): StoryAgentProviderClient => ({
+    createClient: (): LlmClient => ({
       complete: async () => {
         await Promise.resolve();
         calls += 1;
@@ -118,7 +114,7 @@ void test("opens a circuit after two failures, then permits one cooldown trial",
 
 void test("reports missing and exhausted provider routes", async () => {
   const dependencies = {
-    createClient: (): StoryAgentProviderClient => ({
+    createClient: (): LlmClient => ({
       complete: async () => {
         await Promise.resolve();
         return result("unused");
@@ -143,7 +139,7 @@ void test("reports missing and exhausted provider routes", async () => {
   // Case 3: provider route me hai, lekin sab fail ho gaye
   const allFailed = createStoryAgentProviderRouter({
     config: { providers: [provider("gemini")], routes: routes(["gemini"]), cooldownMs: 100 },
-    createClient: (): StoryAgentProviderClient => ({
+    createClient: (): LlmClient => ({
       complete: async () => {
         await Promise.resolve();
         throw providerError("retryable");

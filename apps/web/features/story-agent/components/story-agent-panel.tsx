@@ -28,15 +28,16 @@ type StoryAgentPanelProps = {
 };
 
 export const StoryAgentPanel = (props: StoryAgentPanelProps): React.JSX.Element => {
+  const { isOpen, onClose } = props;
   const [activeTab, setActiveTab] = useState("chat");
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent): void => {
-      if (event.key === "Escape" && props.isOpen) props.onClose();
+      if (event.key === "Escape" && isOpen) onClose();
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [props.isOpen, props.onClose]);
+  }, [isOpen, onClose]);
 
   return (
     <>

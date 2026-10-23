@@ -1,14 +1,14 @@
 import type { Logger } from "@workspace/logging";
 import type { ProviderConfig } from "../../types/index.js";
-import { isStoryAgentProviderError, type StoryAgentChatMessage, type StoryAgentProviderClient, type StoryAgentProviderResult } from "./story-agent.integration.js";
+import { isLlmTransportError, type LlmChatMessage, type LlmClient, type LlmCompletion } from "../../integrations/index.js";
 
 export type StoryAgentProviderProfile = "fast" | "generate" | "tools";
 export type StoryAgentRouterError = Error & Readonly<{ code: "providers_unavailable" | "no_provider_configured" }>;
 export type StoryAgentRouterConfig = Readonly<{ providers: readonly ProviderConfig[]; routes: Readonly<Record<StoryAgentProviderProfile, readonly string[]>>; cooldownMs: number }>;
 type ProviderState = { consecutiveFailures: number; cooldownUntil?: number | undefined; trialInFlight: boolean };
 type Clock = Readonly<{ now: () => number }>;
-type RouterDependencies = Readonly<{ config: StoryAgentRouterConfig; createClient: (config: ProviderConfig) => StoryAgentProviderClient; logger: Pick<Logger, "warn">; clock: Clock }>;
-export type StoryAgentProviderRouter = Readonly<{ complete: (input: Readonly<{ profile: StoryAgentProviderProfile; messages: readonly StoryAgentChatMessage[] }>) => Promise<StoryAgentProviderResult> }>;
+type RouterDependencies = Readonly<{ config: StoryAgentRouterConfig; createClient: (config: ProviderConfig) => LlmClient; logger: Pick<Logger, "warn">; clock: Clock }>;
+export type StoryAgentProviderRouter = Readonly<{ complete: (input: Readonly<{ profile: StoryAgentProviderProfile; messages: readonly LlmChatMessage[] }>) => Promise<LlmCompletion> }>;
 
 const unavailable = (code: StoryAgentRouterError["code"], message: string): StoryAgentRouterError => Object.assign(new Error(message), { code });
 export const isStoryAgentRouterError = (error: unknown): error is StoryAgentRouterError => error instanceof Error && "code" in error && (error.code === "providers_unavailable" || error.code === "no_provider_configured");
@@ -20,7 +20,7 @@ export const createStoryAgentProviderRouter = ({ config, createClient, logger, c
   const eligible = (name: string): boolean => { const state = stateFor(name); if (state.cooldownUntil === undefined) return true; if (clock.now() < state.cooldownUntil || state.trialInFlight) return false; state.trialInFlight = true; return true; };
   const succeed = (state: ProviderState): void => { state.consecutiveFailures = 0; state.cooldownUntil = undefined; state.trialInFlight = false; };
   const fail = (name: string, state: ProviderState): void => { state.consecutiveFailures += 1; state.trialInFlight = false; if (state.consecutiveFailures >= 2) { state.cooldownUntil = clock.now() + config.cooldownMs; logger.warn("Story Agent provider circuit opened.", { provider: name, cooldownMs: config.cooldownMs }); } };
-  return Object.freeze({ complete: async ({ profile, messages }): Promise<StoryAgentProviderResult> => {
+  return Object.freeze({ complete: async ({ profile, messages }): Promise<LlmCompletion> => {
     const route = config.routes[profile];
     if (route.length === 0) throw unavailable("no_provider_configured", `No providers configured for profile: ${profile}`);
     for (const name of route) {
@@ -30,7 +30,7 @@ export const createStoryAgentProviderRouter = ({ config, createClient, logger, c
       const state = stateFor(name);
       try { const result = await createClient(provider).complete({ messages }); succeed(state); return result; }
       catch (error: unknown) {
-        if (!isStoryAgentProviderError(error)) throw error;
+        if (!isLlmTransportError(error)) throw error;
         if (error.kind === "auth") {
           fail(name, state);
           logger.warn("Story Agent provider authentication failed; trying the next provider.", { provider: name, status: error.status });

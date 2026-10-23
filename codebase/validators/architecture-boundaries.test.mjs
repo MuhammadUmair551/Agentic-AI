@@ -260,6 +260,46 @@ test("allows a server-owned external implementation inside its integration bound
   assert.equal(findings.length, 0);
 });
 
+test("rejects direct external transport calls and provider SDK imports outside server integrations", async (context) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "repo-transport-boundary-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const featureRoot = path.join(root, "servers", "api", "features", "story-agent");
+  await mkdir(featureRoot, { recursive: true });
+  await writeFile(path.join(featureRoot, "provider.ts"), "import OpenAI from 'openai';\nawait fetch('https://provider.example.test');\n", "utf8");
+
+  const findings = await validateArchitectureBoundaries({
+    root,
+    architecture: {
+      foundation: { ignoredDirectories: [] },
+      boundaries: {},
+      integrations: { serverDirectory: "integrations", externalImplementationPackages: ["openai"], externalTransportCallIdentifiers: ["fetch"], externalTransportForbiddenRoots: ["features/story-agent"] }
+    },
+    projects: [{ name: "api", type: "server", root: "servers/api" }]
+  });
+
+  assert.deepEqual(findings.map(({ rule }) => rule).sort(), ["external-integration-boundary", "external-transport-boundary"]);
+});
+
+test("allows provider transport implementations inside a server integration", async (context) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "repo-llm-integration-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const integrationRoot = path.join(root, "servers", "api", "integrations", "llm");
+  await mkdir(integrationRoot, { recursive: true });
+  await writeFile(path.join(integrationRoot, "openai-compatible.ts"), "import OpenAI from 'openai';\nawait fetch('https://provider.example.test');\n", "utf8");
+
+  const findings = await validateArchitectureBoundaries({
+    root,
+    architecture: {
+      foundation: { ignoredDirectories: [] },
+      boundaries: {},
+      integrations: { serverDirectory: "integrations", externalImplementationPackages: ["openai"], externalTransportCallIdentifiers: ["fetch"], externalTransportForbiddenRoots: ["features/story-agent"] }
+    },
+    projects: [{ name: "api", type: "server", root: "servers/api" }]
+  });
+
+  assert.equal(findings.length, 0);
+});
+
 test("requires categorized modules to expose indexes without root dumping-ground files", async (context) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "repo-module-surface-"));
   context.after(() => rm(root, { recursive: true, force: true }));

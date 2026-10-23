@@ -28,35 +28,42 @@ const resultFields = (result: StoryAgentPipelineResult, now: string): Partial<St
 });
 
 export const createStoryAgentQueue = ({ repository, service, logger, clock, intervalMs }: QueueDependencies) => {
+  let isProcessing = false;
   const processNext = async (): Promise<void> => {
-    const startedAt = clock.now();
-    const now = toIso(startedAt);
-    const run = await repository.claimQueuedRun(now, toIso(startedAt + lockDurationMs));
-    if (!run) return;
-    if (isExpired(run, now)) {
-      await repository.updateRunStatus(run.runId, "failed", { reason: "expired", error: "expired", ...clearQueueFields, updatedAt: now });
-      return;
-    }
+    if (isProcessing) return;
+    isProcessing = true;
     try {
-      const result = await service.run({ requirement: run.requirement, ...(run.context ? { context: run.context } : {}) });
-      if (result.status === "draft") {
-        await repository.saveDraft({ runId: run.runId, stories: result.stories ?? [], createdAt: now });
-        await repository.updateRunStatus(run.runId, "draft", resultFields(result, now));
+      const startedAt = clock.now();
+      const now = toIso(startedAt);
+      const run = await repository.claimQueuedRun(now, toIso(startedAt + lockDurationMs));
+      if (!run) return;
+      if (isExpired(run, now)) {
+        await repository.updateRunStatus(run.runId, "failed", { reason: "expired", error: "expired", ...clearQueueFields, updatedAt: now });
         return;
       }
-      if (result.status === "questions") {
-        await repository.updateRunStatus(run.runId, "questions", resultFields(result, now));
-        return;
+      try {
+        const result = await service.run({ requirement: run.requirement, ...(run.context ? { context: run.context } : {}) });
+        if (result.status === "draft") {
+          await repository.saveDraft({ runId: run.runId, stories: result.stories ?? [], createdAt: now });
+          await repository.updateRunStatus(run.runId, "draft", resultFields(result, now));
+          return;
+        }
+        if (result.status === "questions") {
+          await repository.updateRunStatus(run.runId, "questions", resultFields(result, now));
+          return;
+        }
+        if (result.status === "queued") {
+          await repository.updateRunStatus(run.runId, "queued", { ...resultFields(result, now), nextAttemptAt: toIso(startedAt + intervalMs) });
+          return;
+        }
+        await repository.updateRunStatus(run.runId, "failed", resultFields(result, now));
+      } catch (error: unknown) {
+        const reason = error instanceof Error ? error.message : "queue_processing_failed";
+        logger.error("Story Agent queue run failed.", { runId: run.runId, reason });
+        await repository.updateRunStatus(run.runId, "failed", { reason, error: reason, ...clearQueueFields, updatedAt: now });
       }
-      if (result.status === "queued") {
-        await repository.updateRunStatus(run.runId, "queued", { ...resultFields(result, now), nextAttemptAt: toIso(startedAt + intervalMs) });
-        return;
-      }
-      await repository.updateRunStatus(run.runId, "failed", resultFields(result, now));
-    } catch (error: unknown) {
-      const reason = error instanceof Error ? error.message : "queue_processing_failed";
-      logger.error("Story Agent queue run failed.", { runId: run.runId, reason });
-      await repository.updateRunStatus(run.runId, "failed", { reason, error: reason, ...clearQueueFields, updatedAt: now });
+    } finally {
+      isProcessing = false;
     }
   };
 
