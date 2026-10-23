@@ -93,6 +93,7 @@ button, input, textarea { font-family: Arial, Helvetica, sans-serif; }
 @keyframes gecko-tail { 0%, 100% { transform: rotate(-1deg); } 50% { transform: rotate(3deg); } }
 @keyframes gecko-think { 0%, 100% { transform: rotate(-2deg); } 50% { transform: rotate(3deg); } }
 @keyframes gecko-success { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes gecko-launcher-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(184, 228, 122, .28); } 55% { box-shadow: 0 0 0 7px rgba(184, 228, 122, 0); } }
 
 .gecko-mascot__body { transform-origin: center; animation: gecko-breathe 3.6s ease-in-out infinite; }
 .gecko-mascot__eyes { transform-origin: 50% 42%; animation: gecko-blink 5s ease-in-out infinite; }
@@ -100,9 +101,12 @@ button, input, textarea { font-family: Arial, Helvetica, sans-serif; }
 .gecko-mascot--thinking .gecko-mascot__body { animation: gecko-think 1.3s ease-in-out infinite; }
 .gecko-mascot--success .gecko-mascot__body { animation: gecko-success .8s ease-in-out 2; }
 .gecko-mascot--error .gecko-mascot__body { animation: gecko-think .35s ease-in-out 2 reverse; }
+.gecko-launcher { animation: gecko-launcher-pulse 3.4s ease-out infinite; }
+.gecko-launcher:hover .gecko-mascot__body, .gecko-launcher:focus-visible .gecko-mascot__body { animation: gecko-success .72s ease-in-out 1; }
+.gecko-launcher:hover .gecko-mascot__tail, .gecko-launcher:focus-visible .gecko-mascot__tail { animation-duration: .85s; }
 
 @media (prefers-reduced-motion: reduce) {
-  .gecko-mascot__body, .gecko-mascot__eyes, .gecko-mascot__tail { animation: none; }
+  .gecko-mascot__body, .gecko-mascot__eyes, .gecko-mascot__tail, .gecko-launcher { animation: none; }
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
 }
 

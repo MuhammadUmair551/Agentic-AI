@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { MessageCirclePlus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, GeckoMascot } from "@workspace/ui";
 import { buildStoryAgentRunCopyText, createStoryAgentClient, filterStoryAgentRuns } from "../story-agent.client";
@@ -140,11 +140,12 @@ export const StoryAgentWidget = ({ apiBaseUrl }: StoryAgentWidgetProps): React.J
       aria-label="Open Story Agent"
       aria-expanded={isOpen}
       aria-controls="story-agent-panel"
-      className="fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-5 z-40 size-14 rounded-[1.35rem] border border-[#d7efb0]/45 bg-[#1d4227] text-[#dff6bc] shadow-[0_12px_32px_rgba(3,19,10,.48)] transition hover:-translate-y-0.5 hover:bg-[#285533] focus-visible:ring-2 focus-visible:ring-[#c9ef8a] sm:bottom-6 sm:right-6"
+      className="gecko-launcher group fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-5 z-40 size-16 rounded-full border-2 border-[#b8e47a]/80 bg-[#173a22] p-1 text-[#b8e47a] shadow-[0_14px_36px_rgba(3,19,10,.62)] transition duration-200 hover:-translate-y-1 hover:scale-105 hover:border-[#d9f8a6] hover:bg-[#214c2c] focus-visible:ring-4 focus-visible:ring-[#c9ef8a]/35 sm:bottom-6 sm:right-6"
       onClick={openPanel}
     >
-      <GeckoMascot className="size-10" />
-      <Plus aria-hidden="true" className="absolute -right-1 -top-1 size-4 rounded-full bg-[#b8e47a] p-0.5 text-[#102116]" />
+      <GeckoMascot className="size-12 drop-shadow-[0_2px_5px_rgba(0,0,0,.35)]" />
+      <span className="absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full border border-[#183d22] bg-[#c9ef8a] text-[#102116]"><MessageCirclePlus aria-hidden="true" className="size-3" /></span>
+      <span className="pointer-events-none absolute right-full mr-3 hidden w-max rounded-sm border border-[#466247] bg-[#102116] px-3 py-2 font-mono text-[11px] text-[#e8f2df] opacity-0 shadow-xl transition group-hover:-translate-x-1 group-hover:opacity-100 sm:block">Open Story Workshop <span className="ml-2 text-[#b8e47a]">Ctrl+J</span></span>
     </Button>
     <StoryAgentPanel isOpen={isOpen} input={input} isLoading={isLoading} run={run} history={filteredHistory} historySearch={historySearch} isHistoryLoading={isHistoryLoading} inputRef={inputRef} onClose={() => setIsOpen(false)} onInputChange={setInput} onNewChat={resetActiveConversation} onHistorySearchChange={setHistorySearch} onSend={() => { void send(); }} onSuggestion={(suggestion) => { setInput(suggestion); inputRef.current?.focus(); }} onSelectHistory={(runId) => { void selectHistory(runId); }} onCopyRun={copyRun} onCopyStory={copyStory} />
   </>;
