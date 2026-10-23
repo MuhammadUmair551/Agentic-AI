@@ -150,8 +150,10 @@ export const validateArchitectureConfiguration = (architecture) => {
   }
   if (!architecture.integrations || typeof architecture.integrations !== "object") {
     issues.push({ level: "error", message: "Architecture policy is missing integration-boundary rules." });
-  } else if (!Array.isArray(architecture.integrations.externalImplementationPackages)) {
-    issues.push({ level: "error", message: "Architecture integrations.externalImplementationPackages must be an array." });
+  } else if (!Array.isArray(architecture.integrations.externalImplementationPackages)
+    || !Array.isArray(architecture.integrations.externalTransportCallIdentifiers)
+    || !Array.isArray(architecture.integrations.externalTransportForbiddenRoots)) {
+    issues.push({ level: "error", message: "Architecture integrations must define externalImplementationPackages, externalTransportCallIdentifiers, and externalTransportForbiddenRoots arrays." });
   }
   const maintenanceScripts = architecture.maintenanceScripts;
   if (!maintenanceScripts || !Array.isArray(maintenanceScripts.packageLocal)

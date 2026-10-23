@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "tsx --test tests/integration/home-page.test.tsx tests/environment.test.ts",
+    "test": "tsx --test tests/integration/home-page.test.tsx tests/environment.test.ts tests/story-agent-ui.test.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   },

@@ -72,3 +72,27 @@ void test("preserves generated stories and clarification questions when queued w
   assert.equal(updates[1]?.status, "draft");
   assert.deepEqual((updates[1]?.extra as { stories?: unknown[] }).stories, [{ title: "Cart story", intent: "Add items", epic: "Cart", size: "S", acceptanceCriteria: ["An item can be added."], states: [], dependsOn: [], openQuestions: [], sliceRationale: "Adds the feature." }]);
 });
+
+void test("does not overlap queue processing while a provider run is still pending", async () => {
+  const updates: Array<{ status: string; extra: unknown }> = [];
+  let claims = 0;
+  let runs = 0;
+  let release: (() => void) | undefined;
+  const pending = new Promise<void>((resolve) => { release = resolve; });
+  const base = repository(queuedRun(), updates);
+  const queue = createStoryAgentQueue({
+    repository: { ...base, claimQueuedRun: async () => { claims += 1; return queuedRun(); } },
+    service: { run: async () => { runs += 1; await pending; return pipeline("draft"); } },
+    logger,
+    clock: { now: () => 0 },
+    intervalMs: 120_000
+  });
+
+  const first = queue.processNext();
+  const second = queue.processNext();
+  release?.();
+  await Promise.all([first, second]);
+
+  assert.equal(claims, 1);
+  assert.equal(runs, 1);
+});

@@ -150,6 +150,8 @@ export const validateArchitectureBoundaries = async (workspace) => {
     const source = await readFile(filePath, "utf8");
     const sourceSegments = segmentsOf(path.relative(workspace.root, filePath));
     const projectRelativePath = toPosixPath(path.relative(path.resolve(workspace.root, project.root), filePath));
+    const isIntegrationFile = sourceSegments.includes(integrationPolicy.serverDirectory ?? "integrations");
+    const isTestFile = sourceSegments.includes("tests") || /\.test\.[cm]?[jt]sx?$/i.test(filePath);
     const sourceFeature = featureIdentity(sourceSegments);
     const usesUiPackageModel = typeof uiPolicy.packageProject === "string";
     const isUiPackage = project.name === uiPolicy.packageProject;
@@ -204,6 +206,21 @@ export const validateArchitectureBoundaries = async (workspace) => {
       ));
     }
 
+    const forbidsExternalTransport = (integrationPolicy.externalTransportForbiddenRoots ?? [])
+      .some((root) => startsWithPath(projectRelativePath, root));
+    if (project.type === "server" && forbidsExternalTransport && !isIntegrationFile && !isTestFile) {
+      for (const identifier of integrationPolicy.externalTransportCallIdentifiers ?? []) {
+        if (new RegExp(`\\b${identifier}\\s*\\(`).test(source)) {
+          findings.push(localIssue(
+            workspace.root,
+            filePath,
+            "external-transport-boundary",
+            `server code must access external transport ${identifier} through an integrations/ boundary.`
+          ));
+        }
+      }
+    }
+
     for (const specifier of getImports(source)) {
       for (const [packageName, exportKeys] of packageModuleSpecifiers) {
         if (specifier.startsWith(`${packageName}/`)) {
@@ -232,7 +249,6 @@ export const validateArchitectureBoundaries = async (workspace) => {
 
       if (project.type === "server") {
         const externalRoot = specifier.startsWith("@") ? specifier.split("/").slice(0, 2).join("/") : specifier.split("/")[0];
-        const isIntegrationFile = sourceSegments.includes(integrationPolicy.serverDirectory ?? "integrations");
         if ((integrationPolicy.externalImplementationPackages ?? []).includes(externalRoot) && !isIntegrationFile) {
           findings.push(issue(
             workspace.root,

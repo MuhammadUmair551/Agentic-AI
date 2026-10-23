@@ -4,17 +4,17 @@ import { build as buildClarifyPrompt } from "../story-agent.clarify.prompt.js";
 import { createStoryAgentService, gatherContext } from "../story-agent.service.js";
 import { storySchema } from "../story-agent.validation.js";
 import type { StoryAgentProviderRouter } from "../story-agent.router.js";
-import type { StoryAgentProviderResult } from "../story-agent.integration.js";
+import type { LlmCompletion } from "../../../integrations/index.js";
 
 const budget = { maxCalls: 6, maxTotalTokens: 1_000, timeoutMs: 10_000, contextTokenLimit: 20, maxStories: 5 };
 const story = {
   title: "A writer creates a story set", intent: "Plan work", epic: "Planning", size: "S",
   acceptanceCriteria: ["Stories are shown"], states: [], dependsOn: [], openQuestions: [], sliceRationale: "Proves the path."
 };
-const completion = (text: string, provider = "gemini"): StoryAgentProviderResult => ({
+const completion = (text: string, provider = "gemini"): LlmCompletion => ({
   text, provider, model: "test", usage: { inputTokens: 2, outputTokens: 3, totalTokens: 5 }
 });
-const router = (responses: readonly StoryAgentProviderResult[]): StoryAgentProviderRouter => {
+const router = (responses: readonly LlmCompletion[]): StoryAgentProviderRouter => {
   let index = 0;
   return {
     complete: async () => {
@@ -26,7 +26,7 @@ const router = (responses: readonly StoryAgentProviderResult[]): StoryAgentProvi
     }
   };
 };
-const service = (responses: readonly StoryAgentProviderResult[], overrides: Partial<typeof budget> = {}) =>
+const service = (responses: readonly LlmCompletion[], overrides: Partial<typeof budget> = {}) =>
   createStoryAgentService({ route: router(responses), now: () => 0, budget: { ...budget, ...overrides } });
 const clear = completion(JSON.stringify({ needsClarification: false, questions: [], assumptions: [] }));
 
